@@ -1,7 +1,3 @@
----
-title: Contributing Guide
----
-
 # Contributing Guide
 
 ## Setting Up the Environment
@@ -27,58 +23,30 @@ uv run pre-commit install
 
 ## Building the Docs Locally
 
-### Install MyST
-
-The docs are built with [MyST-MD](https://mystmd.org). Install it (requires Node.js 20+):
+Install docs dependencies:
 
 ```bash
-npm install -g mystmd
-```
-
-Or via pip (bundles a Node.js runtime automatically):
-
-```bash
-pip install mystmd
-```
-
-To add it to the project's `docs` dependency group:
-
-```bash
-uv add --group docs mystmd
 uv sync --group docs
 ```
 
-### Start a Local Preview Server
-
-From the project root:
+Build static HTML:
 
 ```bash
-myst start
+uv run sphinx-build -b html docs _build/html
 ```
 
-This launches a live-reloading dev server at <http://localhost:3000>.
-
-### Build Static HTML
+Or use autobuild for live reloading:
 
 ```bash
-myst build --html
+uv run sphinx-autobuild docs _build/html
 ```
 
 Output is written to `./_build/html/`.
 
 ## Adding New Pages
 
-1. Create a new `.md` file under `docs/` (or a `.ipynb` notebook under `notebooks/`).
-2. Add the file path to the `toc` section in `myst.yml`:
-
-```yaml
-project:
-  toc:
-    - file: docs/index.md
-    - file: docs/getting-started.md
-    - file: docs/your-new-page.md   # add here
-    - file: docs/contributing.md
-```
+1. Create a new `.md` file under `docs/`.
+2. Add it to the `toctree` in `docs/index.md`.
 
 ## Notebooks
 
@@ -87,14 +55,8 @@ Notebooks are rendered **statically** from stored cell outputs — they are **no
 When adding or updating a notebook:
 1. Run it locally to completion so that output cells are populated.
 2. Commit the notebook with outputs included.
+3. Add the notebook path to the toctree in `docs/index.md`.
 
-## GitHub Pages Deployment
+## ReadTheDocs Deployment
 
-The docs are automatically built and deployed to GitHub Pages on every push to `main` via `.github/workflows/deploy-docs.yml`.
-
-**One-time setup** (required after forking or first setup):
-1. Go to the repository **Settings → Pages**.
-2. Under **Build and deployment**, set the source to **GitHub Actions**.
-
-The deployed site will be available at:
-`https://jbusecke.github.io/esgf-virtual-zarr-data-access/`
+The docs are automatically built and deployed on ReadTheDocs on every push to `main`. Configuration is in `.readthedocs.yaml`.

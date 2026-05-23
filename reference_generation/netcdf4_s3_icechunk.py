@@ -1,5 +1,3 @@
-
-
 # dask distributed icechunk s3fs git+https://github.com/mpiannucci/kerchunk@v3 https://github.com/zarr-developers/numcodecs@zarr3-codecs
 # TMP BRANCH https://github.com/zarr-developers/VirtualiZarr/pull/278
 
@@ -14,37 +12,37 @@ import xarray as xr
 from virtualizarr import open_virtual_dataset
 import dask
 from dask.distributed import Client
-import pandas as pd
 
 
 client = Client(n_workers=16)
 client
 
 urls = [
-    's3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_185001-186012.nc',
-    's3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_187101-188012.nc',
-    's3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_188101-189012.nc',
-    's3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_186101-187012.nc',
-    's3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_189101-190012.nc',
-    's3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_190101-191012.nc',
-    's3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_191101-192012.nc',
-    's3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_192101-193012.nc',
-    's3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_193101-194012.nc',
-    's3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_194101-195012.nc',
-    's3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_195101-196012.nc',
-    's3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_196101-197012.nc',
-    's3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_197101-198012.nc',
-    's3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_198101-199012.nc',
-    's3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_199101-200012.nc',
-    's3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_200101-201012.nc',
-    's3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_201101-201412.nc'
+    "s3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_185001-186012.nc",
+    "s3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_187101-188012.nc",
+    "s3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_188101-189012.nc",
+    "s3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_186101-187012.nc",
+    "s3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_189101-190012.nc",
+    "s3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_190101-191012.nc",
+    "s3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_191101-192012.nc",
+    "s3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_192101-193012.nc",
+    "s3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_193101-194012.nc",
+    "s3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_194101-195012.nc",
+    "s3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_195101-196012.nc",
+    "s3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_196101-197012.nc",
+    "s3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_197101-198012.nc",
+    "s3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_198101-199012.nc",
+    "s3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_199101-200012.nc",
+    "s3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_200101-201012.nc",
+    "s3://esgf-world/CMIP6/CMIP/CCCma/CanESM5/historical/r10i1p1f1/Omon/uo/gn/v20190429/uo_Omon_CanESM5_historical_r10i1p1f1_gn_201101-201412.nc",
 ]
 
 
 vds = open_virtual_dataset(urls[0], indexes={})
 
+
 def process(filename):
-    vds = open_virtual_dataset(filename,  indexes={})
+    vds = open_virtual_dataset(filename, indexes={})
     return vds
 
 
@@ -59,47 +57,47 @@ combined_vds = xr.concat(list(results), dim="time", coords="minimal", compat="ov
 # once icechunk PR is in, we can write to Zarr v3
 # for now, we write to parquet, then will RT to icechunk with 'icechunk' env
 ref_parquet_path = "../refs/netcdf4_s3_icechunk.parquet"
-combined_vds.virtualize.to_kerchunk(
-    ref_parquet_path, format="parquet"
-)
-
+combined_vds.virtualize.to_kerchunk(ref_parquet_path, format="parquet")
 
 
 ###### WRITE ICECHUNK - THIS REQUIRES envs/icechunk_env.yaml #####
 
 # 1. read existing ref
-import xarray as xr 
+import xarray as xr
 from virtualizarr import open_virtual_dataset
-from icechunk import IcechunkStore, StorageConfig, StoreConfig, VirtualRefConfig, S3Credentials
+from icechunk import (
+    IcechunkStore,
+    StorageConfig,
+    StoreConfig,
+    VirtualRefConfig,
+    S3Credentials,
+)
 
-vds = open_virtual_dataset('netcdf4_s3_icechunk.parquet',filetype = 'kerchunk', indexes={})
-vds = vds.set_coords([v for v in vds.variables if v != vds.attrs['variable_id']])
-
-
+vds = open_virtual_dataset(
+    "netcdf4_s3_icechunk.parquet", filetype="kerchunk", indexes={}
+)
+vds = vds.set_coords([v for v in vds.variables if v != vds.attrs["variable_id"]])
 
 
 storage = StorageConfig.s3_from_config(
-    bucket='leap-m2lines-test',
-    prefix='cmip6_virtualizarr/netcdf4_s3_icechunk',
-    endpoint_url='https://nyu1.osn.mghpcc.org',
-    region='dummy',
+    bucket="leap-m2lines-test",
+    prefix="cmip6_virtualizarr/netcdf4_s3_icechunk",
+    endpoint_url="https://nyu1.osn.mghpcc.org",
+    region="dummy",
     allow_http=True,
     credentials=S3Credentials(
         access_key_id="0DJ5POIMB9T498Y4QXP6",
-        secret_access_key="p47QB7sSqbykTi3pZVr7I8SOxsJ1VPCDahA6ALYT")
-    )
-
-
-store = IcechunkStore.create(
-    storage=storage, 
-    config=StoreConfig(
-        virtual_ref_config=VirtualRefConfig.s3_anonymous(region='us-east-2'),
-    )
+        secret_access_key="p47QB7sSqbykTi3pZVr7I8SOxsJ1VPCDahA6ALYT",
+    ),
 )
 
 
-
-
+store = IcechunkStore.create(
+    storage=storage,
+    config=StoreConfig(
+        virtual_ref_config=VirtualRefConfig.s3_anonymous(region="us-east-2"),
+    ),
+)
 
 
 vds.virtualize.to_icechunk(store)
@@ -149,17 +147,21 @@ Data variables:
     uo                  (time, lev, j, i) float32 37GB ...
     """
 
-store.commit('init')
+store.commit("init")
 ds = xr.open_zarr(store, consolidated=False)
-
 
 
 #############################
 
-import xarray as xr 
+import xarray as xr
 from virtualizarr import open_virtual_dataset
-from icechunk import IcechunkStore, StorageConfig, StoreConfig, VirtualRefConfig, S3Credentials
-
+from icechunk import (
+    IcechunkStore,
+    StorageConfig,
+    StoreConfig,
+    VirtualRefConfig,
+    S3Credentials,
+)
 
 
 # storage = StorageConfig.s3_anonymous(
@@ -171,16 +173,16 @@ from icechunk import IcechunkStore, StorageConfig, StoreConfig, VirtualRefConfig
 # )
 
 storage = StorageConfig.s3_anonymous(
-    bucket='leap-m2lines-test',
-    prefix='cmip6_virtualizarr/netcdf4_s3_icechunk',
+    bucket="leap-m2lines-test",
+    prefix="cmip6_virtualizarr/netcdf4_s3_icechunk",
     endpoint_url="https://nyu1.osn.mghpcc.org",
-    allow_http=True, # what exactly does this do? It does not work without this line!
-    region='some-bonkers-region',
+    allow_http=True,  # what exactly does this do? It does not work without this line!
+    region="some-bonkers-region",
 )
-config=StoreConfig(
-        virtual_ref_config=VirtualRefConfig.s3_anonymous(region='us-east-2'),
+config = StoreConfig(
+    virtual_ref_config=VirtualRefConfig.s3_anonymous(region="us-east-2"),
 )
 
-store = IcechunkStore.open_existing(storage, config=config,mode='r')
+store = IcechunkStore.open_existing(storage, config=config, mode="r")
 
-ds = xr.open_zarr(store, decode_cf=False,consolidated=False)
+ds = xr.open_zarr(store, decode_cf=False, consolidated=False)

@@ -25,5 +25,9 @@ dependencies = [
 
 [dependency-groups]
 docs = [
-    "mystmd",
+    "myst-nb>=1.1",
+    "sphinx-book-theme>=1.1",
+    "sphinx-copybutton>=0.5",
+    "sphinx-design>=0.6",
+    "sphinxext-opengraph>=0.9",
 ]
