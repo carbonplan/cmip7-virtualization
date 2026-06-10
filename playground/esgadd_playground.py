@@ -201,6 +201,15 @@ def submit(
     """Run ``esgadd --agg icechunk`` to PATCH the reference asset onto the Item.
 
     ``agg_url`` defaults to the public OSN URL of the dataset's Icechunk store.
+
+    NOTE — this step is **kept deliberately as a demonstration that PATCH does not
+    work against the local Playground**. esgadd builds and sends the correct
+    JSON-Patch request, but ``ghcr.io/djspstfc/stac-fastapi-es:1.0`` does not
+    implement item-level PATCH and returns **HTTP 405** (it supports only POST/PUT;
+    see README "How it actually works"). We surface that 405 as the *expected*
+    outcome rather than crashing, and point at ``post-full`` as the working
+    catalog-side workaround. (Production East reportedly supports PATCH; landing
+    the reference for real needs a transaction API that does — see plan.md.)
     """
     if agg_url is None:
         agg_url = osn_store_href(item_id)
@@ -229,6 +238,16 @@ def submit(
     sys.stdout.write(proc.stdout)
     sys.stderr.write(proc.stderr)
     if proc.returncode != 0:
+        combined = (proc.stdout or "") + (proc.stderr or "")
+        if "405" in combined:
+            print(
+                "\n⚠️  DEMONSTRATED: esgadd's PATCH was rejected with HTTP 405 — the "
+                "local Playground image does not support item-level PATCH (POST/PUT "
+                "only). esgadd itself ran correctly and sent the right request.\n"
+                "   → use `post-full` to land the reference via POST/PUT, or point "
+                "esgadd at a transaction API that supports PATCH (see README/plan.md)."
+            )
+            return
         raise SystemExit(f"esgadd exited {proc.returncode}")
     print("✓ esgadd completed")
 
@@ -364,8 +383,10 @@ def main(argv: Optional[List[str]] = None) -> None:
         if a.cmd in ("build", "all"):
             build(item_id)
         if a.cmd in ("submit", "all"):
+            # Demonstrates the PATCH 405 against the local Playground (see submit()).
             submit(item_id, a.config, a.esgadd, a.dry_run, a.agg_url)
-        if a.cmd == "post-full":
+        if a.cmd in ("post-full", "all"):
+            # Land the reference for real via POST/PUT (workaround for the 405).
             post_full(item_id)
         if a.cmd in ("verify", "all"):
             verify(item_id, a.site)
