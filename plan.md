@@ -253,3 +253,29 @@ options: anonymous vs keyed, region, endpoint_url, per-prefix authorization).
 
 **Canonical reader for now:** direct Icechunk open (xpystac HTTP support pending —
 ESGF-INTEL.md). Revisit when the xpystac HTTP PR lands.
+
+## Track 4 — Prototype next (user-flagged 2026-06-10)
+
+1. **Variable-combination logic.** Prototype combining *multiple variables* (and/or
+   multiple source datasets) into one virtual Icechunk store / one xarray Dataset
+   — e.g. the per-variable CMIP6 files (`ta`, `ua`, `zg`, …) merged into a single
+   analysis-ready cube. Decide: one store per variable vs one multi-variable store;
+   how that maps onto STAC Items/assets; how `combine_nested`/`merge` + the chunk
+   manifests behave across variables. Build on `virtualize_from_urls` +
+   `references.py`.
+
+2. **Same Icechunk store → multiple Item *versions* (icechunk commits).** ⚠️
+   **Important for the STAC spec.** An Icechunk store is versioned (each `commit`
+   is a snapshot). Different ESGF dataset *versions* (e.g. `v20230810` vs a later
+   `vYYYYMMDD`) can be **the same store at different commits/snapshots** — so the
+   STAC reference asset must be able to **pin a specific icechunk commit/snapshot
+   (or named ref/tag)**, not just the store root. Today our asset href is the store
+   root only; there is **nowhere to record the commit**. Actions:
+   - Prototype: build a store, commit v1, append/modify, commit v2; open each
+     **by snapshot id / ref** (`repo.readonly_session(snapshot_id=…)` / branch/tag).
+   - Decide how to encode the commit in the STAC asset: e.g. an
+     `xarray:storage_options` / asset field carrying the snapshot id or ref name
+     (and/or a `#<snapshot>` fragment convention on the href).
+   - **Raise with core-architecture:** the schema needs a place to enter the
+     icechunk commit/ref per Item version. Without it, version→snapshot mapping is
+     lost and you can't reproducibly open the exact data a published Item points to.
