@@ -54,15 +54,28 @@ import httpx
 import icechunk as ic
 import xarray as xr
 
+from cmip7_virtualization.references import build_reference_asset, reference_asset_key
 from cmip7_virtualization.storage import osn_storage, vccs_from_registry
 from cmip7_virtualization.store import repo_exists
 from cmip7_virtualization.virtualize import virtualize_from_urls
 
 # prepopulate is a sibling module (run from the repo root, or `python -m`).
 try:
-    from playground.prepopulate import prepopulate, reachable_data_urls
+    from playground.prepopulate import (
+        WEST_DISCOVERY,
+        fetch_source_items,
+        prepopulate,
+        put_item,
+        reachable_data_urls,
+    )
 except ImportError:  # invoked as a plain script from inside playground/
-    from prepopulate import prepopulate, reachable_data_urls
+    from prepopulate import (
+        WEST_DISCOVERY,
+        fetch_source_items,
+        prepopulate,
+        put_item,
+        reachable_data_urls,
+    )
 
 # --- Playground topology (from ESGF-Playground/docker-compose.yml) -----------
 # East node stac-fastapi-es == discovery API *and* (transactions ext) our PATCH
@@ -220,14 +233,73 @@ def submit(
     print("✓ esgadd completed")
 
 
+# --- post-full (esgadd-PATCH workaround) -------------------------------------
+def post_full(item_id: str, *, source_stac: str = WEST_DISCOVERY) -> None:
+    """Generate the *complete* Item (incl. the virtual reference) and POST it whole.
+
+    This is a workaround for the Playground's missing PATCH support (HTTP 405 — see
+    README). Instead of esgadd *patching* a reference onto an existing Item, we:
+
+      1. (re)build the full Item from the source catalog,
+      2. inject the icechunk reference asset (``reference_icechunk_osn``) ourselves
+         (spec-correct: ``application/vnd.zarr+icechunk``, ``roles: [virtual, data]``
+         — unlike esgadd's ``application/icechunk`` + singular ``role``),
+      3. ``POST`` it to create (or ``PUT`` to replace) the Item in one shot.
+
+    RESULT (verified 2026-06-09): this **works** — the reference lands in the
+    catalog and `verify` reads it back — because POST/PUT *are* supported where
+    PATCH is not.
+
+    WHY IT'S LESS USEFUL (the tradeoff worth communicating):
+      * It **bypasses the production tool** (`esgadd`) and the incremental-update
+        path. The real value of esgadd is PATCHing an *existing* Item you don't own
+        (a node publishes the data; we only add an aggregation later). Recreating
+        the whole Item is not something an external reference-builder can do in
+        production — you can't POST over someone else's published record.
+      * It only demonstrates that the *representation* (an Item carrying a virtual
+        reference asset) is valid, not that the *submission mechanism* works.
+        Landing the reference for real still needs PATCH support on the catalog.
+    """
+    check_playground()
+
+    # (re)generate the full Item from the source catalog (no reliance on a prior seed).
+    matches = [i for i in fetch_source_items(source_stac, COLLECTION, n=100) if i["id"] == item_id]
+    if not matches:
+        raise SystemExit(f"Source catalog has no Item {item_id} with reachable NetCDF.")
+    item = dict(matches[0])
+    item.pop("links", None)
+    item["collection"] = COLLECTION
+    item.get("assets", {}).pop("reference_file", None)
+
+    # Inject the icechunk virtual reference (store must already exist on OSN: run `build`).
+    key = reference_asset_key("icechunk", "osn")  # "reference_icechunk_osn"
+    item["assets"][key] = build_reference_asset(
+        "icechunk", "osn", osn_store_href(item_id),
+        source_node="ceda.ac.uk", region="us-east-1",
+        anonymous=True, endpoint_url=OSN_ENDPOINT,
+    )
+
+    put_item(LOCAL_STAC, COLLECTION, item)
+    print(f"✓ POSTed full Item with reference asset '{key}' (bypassing esgadd/PATCH)")
+    back = get_item(item_id)
+    print(f"  catalog assets now: {sorted(back.get('assets', {}))}")
+
+
 # --- verify ------------------------------------------------------------------
 def _find_icechunk_asset(item: dict, site: str) -> Optional[dict]:
-    """Locate the icechunk asset esgadd added (top-level or nested alternate)."""
-    ref = item.get("assets", {}).get("reference_file")
+    """Locate the icechunk reference asset.
+
+    Covers both paths: esgadd's ``reference_file`` (top-level or nested
+    ``alternate/<site>``) and our ``post_full`` key ``reference_icechunk_osn``
+    (or any asset whose media type mentions icechunk).
+    """
+    assets = item.get("assets", {})
+    for a in assets.values():
+        if "icechunk" in (a.get("type") or ""):
+            return a
+    ref = assets.get("reference_file")
     if ref is None:
         return None
-    if "icechunk" in (ref.get("type") or ""):
-        return ref
     return (ref.get("alternate") or {}).get(site)
 
 
@@ -270,6 +342,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     sp = sub.add_parser("seed", parents=[common]); sp.add_argument("--n", type=int, default=2)
     sub.add_parser("build", parents=[common])
     sub.add_parser("submit", parents=[common])
+    sub.add_parser("post-full", parents=[common])  # esgadd/PATCH workaround (see post_full)
     sub.add_parser("verify", parents=[common])
     sa = sub.add_parser("all", parents=[common]); sa.add_argument("--n", type=int, default=2)
 
@@ -292,6 +365,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             build(item_id)
         if a.cmd in ("submit", "all"):
             submit(item_id, a.config, a.esgadd, a.dry_run, a.agg_url)
+        if a.cmd == "post-full":
+            post_full(item_id)
         if a.cmd in ("verify", "all"):
             verify(item_id, a.site)
 
