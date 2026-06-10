@@ -1,76 +1,94 @@
 #!/usr/bin/env python
 """Track C — end-to-end ``esgadd`` demo against the local ESGF-Playground.
 
-Proves we can attach an Icechunk virtual-reference asset to an existing STAC
-Item using the *production* publisher tool (``esgadd`` from ESGF/esg-publisher),
-talking to the local ESGF-Playground — no production auth required.
+Proves we can attach an Icechunk virtual-reference asset to a STAC Item using the
+*production* publisher tool (``esgadd`` from ESGF/esg-publisher), talking to the
+local ESGF-Playground — no production auth required.
 
-Pipeline (subcommands, or ``all`` to run them in order):
+Flow (subcommands, or ``all`` to run them in order):
 
-    seed    Mirror a CMIP6 collection + a few real Items from the CEDA STAC
-            catalog into the Playground (East node, stac-fastapi-es on :9010).
-            The kerchunk ``reference_file`` asset is stripped so esgadd can land
-            the icechunk reference cleanly at ``/assets/reference_file``.
-    build   Build one Icechunk store from a seeded Item's NetCDF URLs using the
-            installed ``cmip7_virtualization`` package, written to local disk.
-    submit  Invoke ``esgadd --agg icechunk`` (subprocess) to PATCH the icechunk
-            reference asset onto the Item via the Playground transaction path.
-    verify  Read the Item back, assert the icechunk asset is present, and open
-            the Icechunk store directly (xpystac can't read anonymous-HTTP
-            virtual chunks yet — see ESGF-INTEL.md).
+    seed    Query a source STAC catalog (live ESGF-West discovery, since CEDA East
+            prod is empty) for a few Items with reachable-host NetCDF and mirror
+            them into the Playground (playground.prepopulate). No kerchunk
+            ``reference_file`` is kept, so esgadd lands the icechunk reference at
+            ``/assets/reference_file``.
+    build   For each seeded Item, virtualize its NetCDF URLs and write an Icechunk
+            store to **OSN** (``s3://leap-pangeo-pipeline/cmip7-virtualization/``).
+            An AWS-S3 hosting option is included but commented out.
+    submit  Invoke ``esgadd --agg icechunk`` (subprocess) with the public OSN
+            store URL as ``--agg-url`` to PATCH the reference asset onto the Item.
+    verify  Read the Item back, assert the icechunk asset is present, and open the
+            OSN Icechunk store directly (xpystac can't read anonymous-HTTP virtual
+            chunks yet — see ESGF-INTEL.md).
 
 ``esgadd`` lives in ESGF/esg-publisher (esgf-ng branch). It has heavy deps that
-conflict with the virtualizarr stack, so install it in a SEPARATE environment
-and point at it with ``--esgadd /path/to/esgadd`` (default: ``esgadd`` on PATH).
+conflict with the virtualizarr stack, so install it in a SEPARATE environment and
+point at it with ``--esgadd /path/to/esgadd`` (default: ``esgadd`` on PATH).
 See README.md.
+
+OSN access keys are read from the environment (``AWS_ACCESS_KEY_ID`` /
+``AWS_SECRET_ACCESS_KEY``); load them from 1Password first, e.g.::
+
+    export AWS_ACCESS_KEY_ID=$(op read "op://Work/.../Access_Key")
+    export AWS_SECRET_ACCESS_KEY=$(op read "op://Work/.../Secret_Access_Key")
 
 Example
 -------
     # 0. bring up the Playground (separate checkout):
     #    cd ~/Code/ESGF-Playground && docker compose up -d
-    python playground/esgadd_playground.py all --n 3
+    python playground/esgadd_playground.py all --n 2 \
+        --esgadd ~/.venvs/esg-publisher/bin/esgadd
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import httpx
 import icechunk as ic
 import xarray as xr
 
-from cmip7_virtualization.catalog import urls_from_stac_item
-from cmip7_virtualization.storage import http_vccs_from_registry
+from cmip7_virtualization.storage import osn_storage, vccs_from_registry
+from cmip7_virtualization.store import repo_exists
 from cmip7_virtualization.virtualize import virtualize_from_urls
+
+# prepopulate is a sibling module (run from the repo root, or `python -m`).
+try:
+    from playground.prepopulate import prepopulate, reachable_data_urls
+except ImportError:  # invoked as a plain script from inside playground/
+    from prepopulate import prepopulate, reachable_data_urls
 
 # --- Playground topology (from ESGF-Playground/docker-compose.yml) -----------
 # East node stac-fastapi-es == discovery API *and* (transactions ext) our PATCH
 # target. The bundled esgf-transaction-api on :9050 is create-only (no PATCH).
 LOCAL_STAC = "http://localhost:9010"
-# Source discovery catalog we mirror Items FROM.
-# NOTE (2026-06-09): the CEDA East *production* catalog is currently EMPTY —
-# every collection returns numberMatched=0 — so we point at the live, populated
-# ESGF-West discovery API instead. (api.stac.esgf-west.org has no DNS yet; the
-# integration/data-challenge host below is the one that actually serves items.)
-# SOURCE_STAC = "https://api.stac.esgf.ceda.ac.uk"  # CEDA East prod — empty as of 2026-06-09
-SOURCE_STAC = "https://discovery.integration.esgf-west.org"  # ESGF-West discovery (live, populated)
 COLLECTION = "CMIP6"
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
-ICECHUNK_ROOT = REPO_ROOT / "refs" / "icechunk"
 CONFIG_DEFAULT = Path(__file__).resolve().parent / "esg-playground.yaml"
+
+# --- OSN hosting for the Icechunk stores we build ----------------------------
+OSN_BUCKET = "leap-pangeo-pipeline"
+OSN_ENDPOINT = "https://nyu1.osn.mghpcc.org"
+OSN_ROOT_PREFIX = "cmip7-virtualization"
+OSN_PUBLIC_BASE = f"{OSN_ENDPOINT}/{OSN_BUCKET}"
+
+# --- AWS S3 hosting (optional second target; uncomment in build_store) --------
+# S3_BUCKET = "carbonplan-cmip7"
+# S3_REGION = "us-east-1"
+# S3_PREFIX_ROOT = "cmip7-virtualization"
+
+
+def osn_store_href(item_id: str) -> str:
+    """Public-read URL of a dataset's OSN Icechunk store (for ``--agg-url``)."""
+    return f"{OSN_PUBLIC_BASE}/{OSN_ROOT_PREFIX}/{item_id}/"
 
 
 # --- helpers -----------------------------------------------------------------
-def _store_dir(item_id: str) -> Path:
-    return ICECHUNK_ROOT / item_id
-
-
 def check_playground() -> None:
     """Fail fast with an actionable message if the Playground isn't reachable."""
     try:
@@ -95,97 +113,84 @@ def get_item(item_id: str) -> dict:
     return r.json()
 
 
-# --- seed --------------------------------------------------------------------
-def seed(n: int) -> list[str]:
-    """Mirror the CMIP6 collection + ``n`` Items from CEDA into the Playground.
-
-    Strips any existing ``reference_file`` (kerchunk) asset so esgadd's
-    JSON-Patch ``add`` lands cleanly at ``/assets/reference_file`` rather than
-    nesting under ``/assets/reference_file/alternate/<site>`` (which would need
-    the ``alternate`` object to already exist — an RFC-6902 / esgadd gap noted
-    in the README).
-    """
-    check_playground()
-
-    collection = httpx.get(f"{SOURCE_STAC}/collections/{COLLECTION}", timeout=30).json()
-    for field in ("assets", "links"):  # stac-fastapi-es rejects unknown top-level fields
-        collection.pop(field, None)
-    r = httpx.post(f"{LOCAL_STAC}/collections", json=collection, timeout=30)
-    if r.status_code == 409:
-        print(f"Collection {COLLECTION} already exists — skipping")
-    elif r.status_code in (200, 201):
-        print(f"✓ Collection created: {collection['id']}")
-    else:
-        r.raise_for_status()
-
-    items = httpx.get(
-        f"{SOURCE_STAC}/collections/{COLLECTION}/items?limit=50", timeout=30
-    ).json()["features"]
-    # keep only items that carry real NetCDF data assets we can virtualize
-    items = [i for i in items if urls_from_stac_item(i)][:n]
-
-    seeded: list[str] = []
-    for item in items:
-        item["assets"].pop("reference_file", None)  # let esgadd create it fresh
-        item.pop("links", None)
-        r = httpx.put(
-            f"{LOCAL_STAC}/collections/{COLLECTION}/items/{item['id']}",
-            json=item,
-            timeout=30,
+def _osn_keys() -> tuple[str, str]:
+    key = os.environ.get("AWS_ACCESS_KEY_ID")
+    secret = os.environ.get("AWS_SECRET_ACCESS_KEY")
+    if not (key and secret):
+        raise SystemExit(
+            "OSN keys not in env. Export them first, e.g.:\n"
+            '  export AWS_ACCESS_KEY_ID=$(op read "op://Work/.../Access_Key")\n'
+            '  export AWS_SECRET_ACCESS_KEY=$(op read "op://Work/.../Secret_Access_Key")'
         )
-        if r.status_code not in (200, 201):
-            r.raise_for_status()
-        seeded.append(item["id"])
-        print(f"✓ Seeded {item['id']}")
+    return key, secret
 
-    if not seeded:
-        raise SystemExit("No seedable CEDA items found (none had NetCDF data assets).")
-    print(f"\nSeeded {len(seeded)} item(s). First: {seeded[0]}")
-    return seeded
+
+# --- seed --------------------------------------------------------------------
+def seed(n: int) -> List[str]:
+    """Mirror ``n`` suitable Items from the source catalog into the Playground."""
+    check_playground()
+    return prepopulate(LOCAL_STAC, collection=COLLECTION, n=n)
 
 
 # --- build -------------------------------------------------------------------
-def build(item_id: str) -> Path:
-    """Virtualize a seeded Item's NetCDF URLs into a local Icechunk store."""
+def build(item_id: str) -> None:
+    """Virtualize a seeded Item's NetCDF URLs into an Icechunk store on OSN."""
     check_playground()
     item = get_item(item_id)
-    urls = urls_from_stac_item(item)
+    urls = reachable_data_urls(item)
     if not urls:
-        raise SystemExit(f"Item {item_id} has no NetCDF data assets to virtualize.")
+        raise SystemExit(f"Item {item_id} has no reachable NetCDF data assets to virtualize.")
     print(f"Virtualizing {len(urls)} file(s) for {item_id}")
 
+    key, secret = _osn_keys()
+    prefix = f"{OSN_ROOT_PREFIX}/{item_id}/"
+    storage = osn_storage(OSN_BUCKET, prefix, key, secret)
+    if repo_exists(storage):
+        print(f"  store already exists on OSN — skipping ({osn_store_href(item_id)})")
+        return
+
     vds, registry = virtualize_from_urls(urls)
-
-    store_dir = _store_dir(item_id)
-    store_dir.parent.mkdir(parents=True, exist_ok=True)
-    storage = ic.local_filesystem_storage(str(store_dir))
-
     config = ic.RepositoryConfig.default()
-    for vcc in http_vccs_from_registry(registry=registry):
+    for vcc in vccs_from_registry(registry):
         config.set_virtual_chunk_container(vcc)
-
     repo = ic.Repository.open_or_create(storage=storage, config=config)
     session = repo.writable_session("main")
     vds.vz.to_icechunk(session.store)
     snapshot = session.commit("track-c icechunk reference")
     repo.save_config()
-    print(f"✓ Icechunk store written: {store_dir}  (snapshot {snapshot})")
-    return store_dir
+    print(f"  ✓ Built on OSN: {osn_store_href(item_id)}  (snapshot {snapshot})")
+
+    # --- ALSO host on AWS S3 (optional) --------------------------------------
+    # Uncomment to build a second Icechunk store on AWS S3. Requires the AWS
+    # default credential chain (AWS_PROFILE / SSO) and the S3_* constants above.
+    # from cmip7_virtualization.storage import aws_s3_storage
+    # s3_storage = aws_s3_storage(S3_BUCKET, f"{S3_PREFIX_ROOT}/{item_id}/", S3_REGION)
+    # if not repo_exists(s3_storage):
+    #     s3_config = ic.RepositoryConfig.default()
+    #     for vcc in vccs_from_registry(registry):
+    #         s3_config.set_virtual_chunk_container(vcc)
+    #     s3_repo = ic.Repository.open_or_create(storage=s3_storage, config=s3_config)
+    #     s3_session = s3_repo.writable_session("main")
+    #     vds.vz.to_icechunk(s3_session.store)
+    #     s3_session.commit("track-c icechunk reference")
+    #     s3_repo.save_config()
+    #     print(f"  ✓ Built on S3: s3://{S3_BUCKET}/{S3_PREFIX_ROOT}/{item_id}/")
 
 
 # --- submit ------------------------------------------------------------------
 def submit(
     item_id: str,
-    agg_url: Optional[str],
     config_path: Path,
     esgadd_bin: str,
     dry_run: bool,
+    agg_url: Optional[str] = None,
 ) -> None:
-    """Run ``esgadd --agg icechunk`` to PATCH the reference asset onto the Item."""
+    """Run ``esgadd --agg icechunk`` to PATCH the reference asset onto the Item.
+
+    ``agg_url`` defaults to the public OSN URL of the dataset's Icechunk store.
+    """
     if agg_url is None:
-        # The Playground does not dereference the href; default to a file:// URL
-        # of the local store. For production, host on OSN/CEDA and pass --agg-url.
-        agg_url = _store_dir(item_id).resolve().as_uri()
+        agg_url = osn_store_href(item_id)
 
     cmd = [
         esgadd_bin,
@@ -227,7 +232,7 @@ def _find_icechunk_asset(item: dict, site: str) -> Optional[dict]:
 
 
 def verify(item_id: str, site: str) -> None:
-    """Confirm the asset is in the catalog, then open the Icechunk store directly."""
+    """Confirm the asset is in the catalog, then open the OSN Icechunk store."""
     check_playground()
     item = get_item(item_id)
     asset = _find_icechunk_asset(item, site)
@@ -239,60 +244,56 @@ def verify(item_id: str, site: str) -> None:
     print("✓ Icechunk reference asset present in catalog:")
     print(json.dumps(asset, indent=2))
 
-    store_dir = _store_dir(item_id)
-    if not store_dir.exists():
-        print(f"\n(store dir {store_dir} not local — skipping direct read)")
-        return
-
-    # Anonymous-HTTP virtual-chunk read (xpystac engine='stac' can't do this yet).
-    # Derive the host prefixes to authorize anonymously from the item's data URLs.
-    prefixes = {
-        "/".join(url.split("/")[:3]) + "/": None for url in urls_from_stac_item(item)
-    }
-    repo = ic.Repository.open(
-        storage=ic.local_filesystem_storage(str(store_dir)),
-        authorize_virtual_chunk_access=prefixes,
-    )
+    # Open the OSN store directly. xpystac engine='stac' can't read anonymous-HTTP
+    # virtual chunks yet, so authorize each source host anonymously (None).
+    prefixes = {"/".join(u.split("/")[:3]) + "/": None for u in reachable_data_urls(item)}
+    key, secret = _osn_keys()
+    storage = osn_storage(OSN_BUCKET, f"{OSN_ROOT_PREFIX}/{item_id}/", key, secret)
+    repo = ic.Repository.open(storage=storage, authorize_virtual_chunk_access=prefixes)
     ds = xr.open_zarr(repo.readonly_session("main").store)
-    print(f"\n✓ Opened store via direct Icechunk read:\n{ds}")
+    print(f"\n✓ Opened OSN store via direct Icechunk read:\n{ds}")
 
 
 # --- cli ---------------------------------------------------------------------
-def main(argv: Optional[list[str]] = None) -> None:
+def main(argv: Optional[List[str]] = None) -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
 
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--item-id", default=None, help="Dataset/Item id to act on.")
+    common.add_argument("--item-id", default=None, help="Act on one Item (build/submit/verify).")
     common.add_argument("--config", type=Path, default=CONFIG_DEFAULT, help="esgadd YAML config.")
     common.add_argument("--esgadd", default="esgadd", help="Path to the esgadd executable.")
-    common.add_argument("--agg-url", default=None, help="Asset href (default: file:// of the local store).")
-    common.add_argument("--site", default="esgf-playground.local", help="data_node / alternate:name (must match config).")
+    common.add_argument("--agg-url", default=None, help="Override the asset href (default: public OSN store URL).")
+    common.add_argument("--site", default="ceda.ac.uk", help="data_node / alternate:name (must match config).")
     common.add_argument("--dry-run", action="store_true", help="Print the esgadd command without running it.")
 
-    sp = sub.add_parser("seed", parents=[common]); sp.add_argument("--n", type=int, default=3)
+    sp = sub.add_parser("seed", parents=[common]); sp.add_argument("--n", type=int, default=2)
     sub.add_parser("build", parents=[common])
     sub.add_parser("submit", parents=[common])
     sub.add_parser("verify", parents=[common])
-    sa = sub.add_parser("all", parents=[common]); sa.add_argument("--n", type=int, default=3)
+    sa = sub.add_parser("all", parents=[common]); sa.add_argument("--n", type=int, default=2)
 
     a = p.parse_args(argv)
 
+    seeded: List[str] = []
     if a.cmd in ("seed", "all"):
         seeded = seed(a.n)
-        a.item_id = a.item_id or seeded[0]
     if a.cmd == "seed":
         return
 
-    if a.item_id is None:
-        raise SystemExit("--item-id is required for build/submit/verify (or run 'seed'/'all').")
+    # Which Items to act on for build/submit/verify.
+    targets = [a.item_id] if a.item_id else seeded
+    if not targets:
+        raise SystemExit("--item-id is required for build/submit/verify (or run 'all').")
 
-    if a.cmd in ("build", "all"):
-        build(a.item_id)
-    if a.cmd in ("submit", "all"):
-        submit(a.item_id, a.agg_url, a.config, a.esgadd, a.dry_run)
-    if a.cmd in ("verify", "all"):
-        verify(a.item_id, a.site)
+    for item_id in targets:
+        print(f"\n=== {item_id} ===")
+        if a.cmd in ("build", "all"):
+            build(item_id)
+        if a.cmd in ("submit", "all"):
+            submit(item_id, a.config, a.esgadd, a.dry_run, a.agg_url)
+        if a.cmd in ("verify", "all"):
+            verify(item_id, a.site)
 
 
 if __name__ == "__main__":
