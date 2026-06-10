@@ -1,0 +1,25 @@
+# esgadd config for the local ESGF-Playground (NO AUTH).
+#
+# How esgadd uses this (verified against ESGF/esg-publisher @ esgf-ng-v5.4a,
+# src/python/esgcet/{esgstacaddrep,stac_client}.py):
+#
+#   1. getTransactionClient(stac_config) inspects stac_config.stac_client.redirect_uri.
+#      If it does NOT contain "globus" it returns EGITransactionClient.
+#   2. Because we pass `--stac-api` on the command line, EGITransactionClient takes
+#      its no-auth branch: self.auth = None, verify=False. So the PATCH is anonymous
+#      — exactly what the Playground needs.
+#   3. `data_node` is used as the asset's `alternate:name` (the "site") when
+#      `--datanode` is not given on the command line.
+#
+# Both the item GET (discovery) and the JSON-Patch PATCH (transaction) go to the
+# single URL passed via `--stac-api`. For the Playground East node that is the
+# stac-fastapi-es discovery API on http://localhost:9010, which has the STAC
+# transactions extension enabled (the bundled esgf-transaction-api on :9050 is
+# create-only and cannot PATCH — see README).
+
+data_node: esgf-playground.local
+
+stac_config:
+  stac_client:
+    # Anything without the substring "globus" selects the EGI (no-auth here) client.
+    redirect_uri: ""

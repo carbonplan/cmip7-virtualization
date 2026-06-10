@@ -76,14 +76,16 @@ the eventual PR. Note `uv sync` in a worktree resolves against that worktree's
 
 ## Architecture
 
-A research project — scripts and notebooks demonstrating how to create virtual Zarr reference stores for CMIP6/CMIP7 data — plus an installable package, `src/cmip7_virtualization/`.
+This project has an installable Python package (`cmip7_virtualization`) plus scripts and notebooks demonstrating virtual Zarr reference store creation for CMIP6/CMIP7 data.
 
-**`catalog.py`** — the only module documented here; the rest arrive on their own branches.
+**Package:** `src/cmip7_virtualization/` — importable via `from cmip7_virtualization import virtualize_from_urls`.
 
-- `STAC_BASES`: read/write endpoints for test and production on both the East (CEDA) and West federations.
-- `collection_counts(base, verify=True)`: item count per collection. Absorbs two server quirks so callers need not know them — (a) `/collections` can 500 *wholesale* when a single collection document is unserialisable (West's `obs4ref`), so `_collections_meta` falls back to the root catalog's `child` links; (b) West advertises lowercase ids (`cmip6plus`) but stores canonical DRS case (`CMIP6Plus`) and `/search` is case-sensitive, so the collection title is OR'd in alongside `upper()`/`lower()`. ⚠️ `verify=True` reconciles against the unfiltered total and, on mismatch, **pages every item** — 391k on East prod. Pass `verify=False` on hot paths.
-- `is_reference_asset(asset)`: substring-matches `kerchunk`/`icechunk` in the media type and the `reference`/`virtual` roles, because publishers disagree on spelling (`application/vnd.zarr+kerchunk` vs our `application/vnd+zarr+kerchunk`).
-- `notebooks/catalog-discovery/catalog-check.ipynb` prints the whole matrix; `tests/test_live_catalogs.py` is the live monitor.
+- `virtualize.py`: `virtualize_from_urls(urls, s3_region=...)` → `(xr.Dataset, ObjectStoreRegistry)` using `HDFParser` + `open_virtual_mfdataset`. Handles anonymous HTTP (CEDA) **and** anonymous `s3://` sources (esgf-world is `us-east-2`, `skip_signature=True`).
+- `storage.py`: `osn_storage` (Ceph, static keys) / `aws_s3_storage` (real AWS S3, creds via AWS default chain so `AWS_PROFILE`/SSO works) / `vccs_from_registry` (HTTP **and** S3 virtual-chunk containers) / `authorize_prefixes_from_registry` (read-side `authorize_virtual_chunk_access`).
+- `catalog.py`: `STAC_BASES` (read/write endpoints for test and production on both the East (CEDA) and West federations); `collection_counts(base, verify=True)` for item count per collection; `is_reference_asset(asset)`. Two server quirks are absorbed here so callers need not know them — (a) `/collections` can 500 *wholesale* when a single collection document is unserialisable (West's `obs4ref`), so `_collections_meta` falls back to the root catalog's `child` links; (b) West advertises lowercase ids (`cmip6plus`) but stores canonical DRS case (`CMIP6Plus`) and `/search` is case-sensitive, so the collection title is OR'd in alongside `upper()`/`lower()`. ⚠️ `verify=True` reconciles against the unfiltered total and, on mismatch, **pages every item** — 391k on East prod; pass `verify=False` on hot paths. `is_reference_asset` substring-matches `kerchunk`/`icechunk` in the media type and the `reference`/`virtual` roles, because publishers disagree on spelling (`application/vnd.zarr+kerchunk` vs our `application/vnd+zarr+kerchunk`). `notebooks/catalog-discovery/catalog-check.ipynb` prints the whole matrix; `tests/test_catalog.py` is offline, `tests/test_live_catalogs.py` is the live monitor.
+- `references.py`: multi-reference asset model + `select_reference(assets, prefer_engine, prefer_storage)` policy (icechunk>kerchunk, s3>osn). **Each (engine×storage×source) is a SEPARATE top-level asset, not an `alternate`** — alternate-assets is only for *identical files* (replicas). Tested in `tests/test_references.py` (`uv run pytest`).
+
+**Multi-reference notebooks** (`notebooks/`): `build_and_seed_playground.ipynb` builds Icechunk on OSN+AWS-S3 (one example sourced from esgf-world S3) and seeds the Playground with separate reference assets; `reference-discovery-and-selection.ipynb` demonstrates discovery→filter→select→read across **every** access pattern (pystac `get_assets`+`select_reference`, direct Icechunk open, xpystac `engine="stac"`, kerchunk `reference_file`, intake-ESGF), recording WORKS/FAILS into a summary matrix. (Not run in CI; require Playground + AWS + OSN creds.)
 
 **Two reference-generation patterns:**
 
@@ -97,6 +99,16 @@ an ordinary web server (CEDA publishes one from a JASMIN group workspace this wa
 Demo: `notebooks/reference-generation/read-jasmin-icechunk-over-https.ipynb`.
 `virtual_prefixes` are the hosts the *chunk manifests* point at — omit them and the
 metadata opens fine while every array read fails.
+
+**Catalog submission demo (`playground/`):** Track C end-to-end — attach an
+Icechunk reference asset to a STAC Item using the production tool `esgadd`
+against the local [ESGF-Playground](https://github.com/ESGF/ESGF-Playground),
+no auth. `esgadd_playground.py` runs `seed → build → submit → verify`; `esgadd`
+PATCHes the stac-fastapi-es East node (`:9010`) anonymously (the bundled
+transaction API on `:9050` is create-only). Install `esgadd` in a SEPARATE env
+(conflicting deps). See `playground/README.md` for commands + the esgadd quirks
+to file upstream (`type: application/icechunk` vs `vnd.zarr+icechunk`, `role` vs
+`roles`).
 
 **Key libraries:**
 - `virtualizarr` — installed from git HEAD (not PyPI); entry points: `open_virtual_dataset`, `open_virtual_mfdataset`, `HDFParser`, `ObjectStoreRegistry`
