@@ -103,12 +103,24 @@ metadata opens fine while every array read fails.
 **Catalog submission demo (`playground/`):** Track C end-to-end — attach an
 Icechunk reference asset to a STAC Item using the production tool `esgadd`
 against the local [ESGF-Playground](https://github.com/ESGF/ESGF-Playground),
-no auth. `esgadd_playground.py` runs `seed → build → submit → verify`; `esgadd`
-PATCHes the stac-fastapi-es East node (`:9010`) anonymously (the bundled
-transaction API on `:9050` is create-only). Install `esgadd` in a SEPARATE env
-(conflicting deps). See `playground/README.md` for commands + the esgadd quirks
-to file upstream (`type: application/icechunk` vs `vnd.zarr+icechunk`, `role` vs
-`roles`).
+no auth. Two modules: `prepopulate.py` (factored-out *seed* — query a live
+catalog, keep Items with reachable-host NetCDF, mirror into the Playground) and
+`esgadd_playground.py` (`seed → build → submit → verify`). **build** virtualizes
+the Item's NetCDF into an Icechunk store **on OSN** (AWS-S3 target commented out);
+**submit** runs `esgadd --agg icechunk --agg-url <public OSN URL>`.
+
+**Source catalog (2026-06-09):** CEDA East prod (`api.stac.esgf.ceda.ac.uk`) is
+**empty** — we source Items from live **ESGF-West discovery**
+(`discovery.integration.esgf-west.org`); it has no kerchunk refs and many dummy
+hrefs, so we filter to `REACHABLE_HOSTS` (ornl/nci/nird).
+
+**Two known blockers (see `playground/README.md` + `plan.md`):** (1) esgadd
+(`esgf-ng-v5.4a`) needs 3 packaging-bug workarounds to `pip install` (version-at-
+build-time; typo'd dep `wcrp-cc-plugi`; undeclared `esgvoc`). (2) The local
+Playground image (`djspstfc/stac-fastapi-es:1.0`) **rejects PATCH (HTTP 405)** —
+POST/PUT only — so esgadd's reference can't land locally (it runs correctly and
+emits the right request). Install `esgadd` in a SEPARATE env (conflicting deps).
+README also lists the 7 esgadd semantic quirks to file upstream.
 
 **Key libraries:**
 - `virtualizarr` — installed from git HEAD (not PyPI); entry points: `open_virtual_dataset`, `open_virtual_mfdataset`, `HDFParser`, `ObjectStoreRegistry`
