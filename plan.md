@@ -81,62 +81,70 @@ our specific VolMIP Items.
 - Known esgadd quirks (file upstream): `application/icechunk` media type, `role`
   vs `roles`, hardcoded `description:"TEST"`, can't set a custom asset key.
 
-## Design — factor the prepopulate step OUT
+## Design — IMPLEMENTED: live-catalog flow (query → mirror → build → esgadd)
 
-Currently `seed()` is embedded in `playground/esgadd_playground.py` and pulls from
-CEDA. Refactor so prepopulation is reusable and **OSN-driven**:
+The earlier OSN-driven plan (reconstruct Items from OSN store names) was
+superseded once we found the West catalog is live: it's more demonstrative to
+mirror **real** Items from a live catalog, build fresh Icechunk stores, and
+esgadd. Two factored modules under `playground/`:
 
-1. **New module `playground/prepopulate.py`** (or `cmip7_virtualization` package
-   module if it should be importable/tested):
-   - `list_osn_stores(bucket, root_prefix) -> list[str]` — list OSN prefixes →
-     dataset_ids (the AWS-CLI listing, in code via obstore/boto3 + OSN endpoint).
-   - `dataset_id_to_source_urls(dataset_id) -> list[str]` — DRS → CEDA DAP
-     archive dir → list `.nc` files → `https://dap.ceda.ac.uk/...` URLs.
-     **(pending the URL-source decision the user deferred to ESGF — see Open
-     questions.)**
-   - `minimal_item(dataset_id, urls) -> dict` — STAC Item keyed by dataset_id
-     with `data` assets (reuse the pattern in
-     `notebooks/build_and_seed_playground.ipynb`).
-   - `ensure_collection(stac_url, collection)` — create the CMIP6 collection
-     (mirror minimal metadata; can't pull from CEDA now, so use a static stub).
-   - `prepopulate(stac_url, dataset_ids)` — PUT each item (stripping
-     `reference_file` so esgadd lands cleanly).
-2. **Rewire `esgadd_playground.py`** to import from `prepopulate` instead of its
-   inline `seed()`. Keep the `build/submit/verify` subcommands. Add a mode that
-   takes the OSN store list as the dataset source (no CEDA dependency).
-3. **esgadd loop**: for each OSN dataset_id, `--agg-url` =
-   `https://nyu1.osn.mghpcc.org/leap-pangeo-pipeline/cmip7-virtualization/{id}/`
-   (public OSN URL — production-style, not `file://`).
-4. **verify**: read item back, assert the icechunk asset present; open the OSN
-   store directly with `Repository.open(..., authorize_virtual_chunk_access=
-   {"https://dap.ceda.ac.uk/": None})` (xpystac engine='stac' can't read
-   anonymous-HTTP virtual chunks yet).
+1. **`prepopulate.py`** — the factored-out *seed*:
+   - `fetch_source_items(source_stac, collection, n)` — query West discovery, keep
+     only Items whose NetCDF is on a reachable node (`REACHABLE_HOSTS` =
+     ornl / nci / nird; skips dummy `esgf-test.test.gov` + globus-only hrefs).
+   - `ensure_collection(...)` — mirror the collection metadata (rewrite id to
+     `CMIP6`, strip fields stac-fastapi-es rejects).
+   - `put_item(...)` — POST-create, PUT-on-409 (transactions extension).
+   - `mirror_items(...)` / `prepopulate(...)` — seed the Playground; strips any
+     `reference_file` so esgadd would land cleanly (West has none today).
+2. **`esgadd_playground.py`** — orchestrates `seed → build → submit → verify`:
+   - `build` virtualizes the Item's NetCDF into an Icechunk store **on OSN**
+     (`s3://leap-pangeo-pipeline/cmip7-virtualization/<id>/`); an **AWS-S3** target
+     is included but **commented out** in `build()`.
+   - `submit` runs `esgadd --agg icechunk --agg-url <public OSN URL>`.
+   - `verify` reads the Item back, then opens the OSN store directly
+     (`authorize_virtual_chunk_access={host: None}`; xpystac can't read anon-HTTP).
 
 ## Task list
 
-- [ ] **USER:** confirm with ESGF whether the empty CEDA STAC catalog is
-      intended/temporary, and the source-URL approach (deferred above).
+- [ ] **USER:** ask ESGF whether the empty CEDA East prod catalog is intended/
+      temporary (West discovery is live and used in the meantime).
 - [x] Resolve the disk-full blocker; `uv sync --group dev`; `uv run pytest` (11 pass).
 - [x] Discover existing OSN references via AWS CLI (4 VolMIP UKESM stores).
-- [x] Confirm each OSN prefix is a real Icechunk repo (config.yaml etc.).
-- [x] Confirm CEDA DAP source `.nc` files still reachable at the DRS path.
-- [x] Confirm Playground East (`:9010`) up.
-- [ ] Decide URL-source strategy (CEDA DAP archive vs read-from-store vs minimal)
-      — **blocked on user/ESGF**.
-- [ ] Write `playground/prepopulate.py` (factored-out, OSN-driven seeding).
-- [ ] Refactor `playground/esgadd_playground.py` to use it; add OSN-source mode.
-- [ ] Install esgadd in a separate venv (`~/.venvs/esg-publisher`).
-- [ ] Run end-to-end: prepopulate → esgadd (OSN URL) → verify, for the 4 stores.
-- [ ] Update `playground/README.md` + project `CLAUDE.md` with the OSN-driven flow.
+- [x] Find a queryable catalog: **ESGF-West discovery is live** (`discovery.integration.esgf-west.org`); CEDA East prod empty.
+- [x] Point the source endpoint at West (old CEDA line commented out).
+- [x] Write `playground/prepopulate.py` (factored-out, query→mirror).
+- [x] Refactor `playground/esgadd_playground.py` (seed→build-on-OSN→submit→verify).
+- [x] Verify end-to-end vs live Playground+OSN: seed, build, submit --dry-run, verify ✅.
+- [x] Install esgadd in a separate venv (needed 3 packaging-bug workarounds — documented).
+- [x] Run real `esgadd` PATCH — **BLOCKED: Playground image returns HTTP 405 (no PATCH).**
+- [x] Document upstream issues in `playground/README.md`.
+- [ ] Update project `CLAUDE.md` with the live-catalog flow (next).
+- [ ] Resolve PATCH-405 (stac-fastapi-es image with PATCH addon, or accept dry-run proof).
+
+## Upstream issues found (file these)
+
+**ESGF/esg-publisher (`esgf-ng-v5.4a`) — packaging, blocks `pip install`:**
+1. `esgcet/__init__.py` reads its version via `importlib.metadata.version("esgcet")`
+   at build time (`setup.py` does `import esgcet`) → `PackageNotFoundError` before
+   install. Hardcode / use a file-or-git version backend.
+2. `setup.py` requires **`wcrp-cc-plugi`** — non-existent (typo for `cc-plugin-wcrp`).
+3. `esgvoc` imported at runtime (`stac_converter.py`) but not in `install_requires`.
+
+**ESGF-Playground — `ghcr.io/djspstfc/stac-fastapi-es:1.0`:**
+4. Item endpoint **does not support PATCH** (405; `OPTIONS` → `allow: GET`; only the
+   base transactions conformance class, not `…/transaction#patch`). `POST`/`PUT`
+   work. esgadd is PATCH-only → its reference can't land on the local Playground.
+
+**ESGF/esg-publisher — `esgadd` semantics (already in README, 7 items):**
+`application/icechunk` media type, `role` vs `roles`, hardcoded `description:"TEST"`,
+nested-`alternate` RFC-6902 gap, no `--agg-url` validation, alternate-nesting is
+wrong for distinct stores, can't add an arbitrarily-keyed asset.
 
 ## Open questions (for ESGF / user)
 
-1. **Empty CEDA STAC catalog** — temporary? ETA for items returning? (blocks the
-   live-CEDA seed path; we work around it via OSN names for now.)
-2. **Source-URL recovery for seeded items** — user is checking with ESGF.
-   Candidates: (a) CEDA DAP archive path from DRS [recommended, works today];
-   (b) read exact source URLs from the Icechunk store manifest [most faithful];
-   (c) minimal items, no data assets [simplest]. Decision deferred.
-3. **Item identity** — is keying the Playground item purely by the OSN
-   dataset_id acceptable as "the matching dataset", given CEDA can't supply the
-   canonical item right now?
+1. **Empty CEDA East prod catalog** — temporary? ETA for items returning?
+2. **PATCH on the Playground** — which stac-fastapi-es image/flag enables the
+   JSON-Patch addon so esgadd can land its reference locally?
+3. **No kerchunk refs in West** — the demo adds the first virtual reference, not a
+   second alongside kerchunk. Fine for now, or wait for kerchunk-bearing Items?
