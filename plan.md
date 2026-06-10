@@ -4,27 +4,44 @@
 > build a **factored-out** script that prepopulates the Playground with the
 > matching STAC items, then **esgadd** each OSN Icechunk reference onto its item.
 
-## ⚠️ Unexpected blocker — the official CEDA STAC catalog is EMPTY (2026-06-09)
+## ⚠️ The CEDA East *production* catalog is EMPTY — but the ESGF-West catalog is LIVE
 
-The production CEDA STAC API responds, the collections still exist, but **every
-collection has zero items**:
+**CEDA East prod (`api.stac.esgf.ceda.ac.uk`) — empty (2026-06-09):**
 
 ```
 https://api.stac.esgf.ceda.ac.uk/collections/{C}/items?limit=1  ->  numberMatched=0
   CMIP6=0  CMIP6Plus=0  CMIP7=0  CORDEX-CMIP6=0  obs4REF=0
 ```
+Collection metadata still resolves (`GET /collections/CMIP6` → 200), but zero
+items. Earlier this same session the seed code pulled live items from it, so it
+drained recently (reindex / rebuild, presumed temporary).
 
-- The collection metadata still resolves (`GET /collections/CMIP6` → 200).
-- Earlier **this same session** the seed code pulled live items from
-  `…/collections/CMIP6/items?limit=20` and got real features — so the catalog
-  was drained recently (reindex / rebuild on CEDA's side, presumed temporary).
-- **Impact:** the original `seed()` path (mirror CEDA collection + pull live
-  Items) no longer returns anything. We cannot source "matching datasets" from
-  the CEDA STAC API right now.
+**ESGF-West discovery (`discovery.integration.esgf-west.org`) — LIVE & populated.**
+Found via Slack (#core-architecture, #esgf-gui, #arco) + `ESGF-INTEL.md`:
+- Canonical `api.stac.esgf-west.org` has **no DNS yet**; the *integration /
+  data-challenge* host is the one that serves items.
+- `GET discovery.integration.esgf-west.org/collections/CMIP6/items?limit=2` →
+  real items (AerChemMIP / CFMIP / E3SM data-challenge datasets).
+- Publisher config (Alok's 2026-06-05 log) confirms the split:
+  discovery `https://discovery.integration.esgf-west.org`,
+  transaction `https://transaction.integration.esgf-west.org` (Globus-auth).
+- Sasha + Lee (2026-06-08): East⇄West STAC metadata is **replicated** ("eventual
+  consistency, ready for use now").
+- Rhys (2026-05-15): CEDA-sourced subset *was* findable via
+  `filter alternate:name = ceda.ac.uk`; **now returns 0** (data challenge moved on).
 
-**→ ACTION FOR USER: ask ESGF/CEDA whether the empty catalog is intended /
-temporary, and when items return.** Until then we drive seeding from the OSN
-store names (below), which is arguably more robust anyway.
+**Decision (user): "don't care about the actual experiments."** So we point the
+source-catalog endpoint at the live West discovery API and proceed — done in
+`playground/esgadd_playground.py` (`SOURCE_STAC`, old CEDA line commented out).
+
+**Note:** our 4 existing OSN VolMIP stores are **not** in the current West
+catalog (the data challenge rotated datasets). So "matching datasets" still has
+to be reconstructed from the OSN store names (next section) — West gives us the
+live **collection metadata** + a working source for *new* demo items, but not
+our specific VolMIP Items.
+
+**→ STILL FOR USER/ESGF:** (1) is the empty CEDA prod catalog intended/temporary?
+(2) source-URL recovery for reconstructed Items (deferred to ESGF — see Open Qs).
 
 ## What still works (verified live this session)
 
