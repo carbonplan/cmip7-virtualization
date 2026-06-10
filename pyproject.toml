@@ -1,5 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cmip7_virtualization"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [project]
-name = "esgf-virtual-zarr-data-access"
+name = "cmip7-virtualization"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -21,9 +31,19 @@ dependencies = [
     "kerchunk",
     "tqdm>=4.67.1",
     "matplotlib>=3.10.7",
+    "httpx>=0.28.1",
+    "onepassword-sdk>=0.4.0",
+    "pystac>=1.10",
+    "xpystac",
 ]
 
 [dependency-groups]
 docs = [
     "mystmd",
 ]
+dev = [
+    "pytest>=8",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
