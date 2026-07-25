@@ -20,7 +20,7 @@ dependencies = [
     "distributed",
     "h5netcdf",
     "h5py",
-    "icechunk",
+    "icechunk>=2.0",
     "ipykernel",
     "netcdf4",
     "pre-commit",
@@ -47,3 +47,6 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "live: hits a live remote store over the network (deselect with -m 'not live')",
+]
