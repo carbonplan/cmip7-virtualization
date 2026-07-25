@@ -47,3 +47,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "live: hits a live remote catalog over the network (deselect with -m 'not live')",
+    "watch: asserts an observed catalog state still holds; a failure means the catalogs changed, not that our code broke (deselect with -m 'not watch')",
+]
