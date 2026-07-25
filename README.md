@@ -52,39 +52,6 @@ uv run pytest -m watch                 # "did the catalogs change?" checks
 Each `watch` failure message says what to do about it. The most consequential are
 CMIP7 appearing on East prod and reference assets reappearing anywhere.
 
-### Continuous integration
-
-| Workflow | Trigger | What it runs |
-| --- | --- | --- |
-| `tests.yml` | every PR, push to `main`, manual | the whole suite, as two checks: **offline (no network)** and **live (hits real ESGF catalogs)** |
-| `catalog-monitor.yml` | daily 06:00 UTC, manual | the whole suite, and files a GitHub issue when it fails |
-
-The split in `tests.yml` is so the check name alone tells you what broke —
-`offline` red is our code, `live` red is usually somebody else's catalog. Between
-them they run every test in the repo.
-
-`catalog-monitor.yml` is the part that catches change nobody asked about. On
-failure it opens an issue labelled **`catalog-drift`** containing the failed test
-names and a log tail, or comments on the existing open one rather than filing a
-duplicate every morning. The label is created on first use.
-
-Three things about the monitor worth knowing before you wonder why nothing
-happened:
-
-- `schedule` **only ever fires on the repository's default branch**. The timer
-  starts when this lands on `main`, not when the branch is pushed.
-- `workflow_dispatch` needs the workflow on the default branch too — dispatching
-  it from a feature branch returns `HTTP 404: workflow catalog-monitor.yml not
-  found on the default branch`. So there is no way to trigger the monitor before
-  it merges.
-- GitHub disables scheduled workflows in repositories with no activity for 60
-  days, and re-enables them on the next push.
-
-In practice that means the suite itself is proven on every PR by `tests.yml`,
-which runs exactly the same tests; the only part that cannot be exercised until
-this reaches `main` is the issue-filing step. Once merged: **Actions → Catalog
-monitor → Run workflow**, or `gh workflow run catalog-monitor.yml`.
-
 
 ## license
 
