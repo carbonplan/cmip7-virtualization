@@ -22,6 +22,18 @@ uv run ruff check --fix
 uv run ruff format
 ```
 
+### Tests
+```bash
+uv run pytest                          # everything, live network tests included
+uv run pytest -m "not live"            # offline only
+uv run pytest -m "live and not watch"  # live hard invariants only
+uv run pytest -m watch                 # "did the catalogs change?" checks
+```
+`live` tests hit real ESGF catalogs and run by default — a catalog we do not
+control moving under us is exactly what we want to hear about. `watch` tests
+assert an *observed* server state still holds; a failure means the world changed
+and a decision is due, not that our code broke. Markers in `pyproject.toml`.
+
 ### Docs (requires `uv sync --group docs` first)
 ```bash
 myst start          # local preview server at http://localhost:3000
@@ -36,7 +48,14 @@ jupyter kernelspec uninstall esgf-virtual-zarr
 
 ## Architecture
 
-This is a research project with no installable Python package — it contains scripts and notebooks demonstrating how to create virtual Zarr reference stores for CMIP6 data.
+A research project — scripts and notebooks demonstrating how to create virtual Zarr reference stores for CMIP6/CMIP7 data — plus an installable package, `src/cmip7_virtualization/`.
+
+**`catalog.py`** — the only module documented here; the rest arrive on their own branches.
+
+- `STAC_BASES`: read/write endpoints for test and production on both the East (CEDA) and West federations.
+- `collection_counts(base, verify=True)`: item count per collection. Absorbs two server quirks so callers need not know them — (a) `/collections` can 500 *wholesale* when a single collection document is unserialisable (West's `obs4ref`), so `_collections_meta` falls back to the root catalog's `child` links; (b) West advertises lowercase ids (`cmip6plus`) but stores canonical DRS case (`CMIP6Plus`) and `/search` is case-sensitive, so the collection title is OR'd in alongside `upper()`/`lower()`. ⚠️ `verify=True` reconciles against the unfiltered total and, on mismatch, **pages every item** — 391k on East prod. Pass `verify=False` on hot paths.
+- `is_reference_asset(asset)`: substring-matches `kerchunk`/`icechunk` in the media type and the `reference`/`virtual` roles, because publishers disagree on spelling (`application/vnd.zarr+kerchunk` vs our `application/vnd+zarr+kerchunk`).
+- `notebooks/catalog-discovery/catalog-check.ipynb` prints the whole matrix; `tests/test_live_catalogs.py` is the live monitor.
 
 **Two reference-generation patterns:**
 
