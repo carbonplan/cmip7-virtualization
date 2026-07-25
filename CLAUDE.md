@@ -34,6 +34,12 @@ control moving under us is exactly what we want to hear about. `watch` tests
 assert an *observed* server state still holds; a failure means the world changed
 and a decision is due, not that our code broke. Markers in `pyproject.toml`.
 
+### CI (`.github/workflows/`)
+- `tests.yml` — every PR + push to `main`. Two jobs, `offline` and `live`, which together are the whole suite; split so the check name says whether it is our code or someone else's catalog.
+- `catalog-monitor.yml` — daily 06:00 UTC. Runs the whole suite and, on failure, opens (or comments on) an issue labelled `catalog-drift`. ⚠️ `schedule` **and** `workflow_dispatch` both require the workflow to be on the **default branch** — dispatching from a feature branch 404s — so the monitor cannot run at all until this is on `main`. The same tests run on every PR via `tests.yml`; only the issue-filing step is unexercised until then.
+- `deploy-docs.yml` — pre-existing; MyST → GitHub Pages on push to `main`.
+- Pinned to `actions/checkout@v5` + `astral-sh/setup-uv@v9` (`enable-cache: true`). Lint changes with `uvx --from actionlint-py actionlint .github/workflows/*.yml`.
+
 ### Docs (requires `uv sync --group docs` first)
 ```bash
 myst start          # local preview server at http://localhost:3000
