@@ -26,7 +26,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: astral-sh/setup-uv@v9
+      # Exact release tag on purpose: astral-sh/setup-uv publishes floating major
+      # tags only up to v7, so @v9 does not resolve ("unable to find version v9").
+      - uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
 
@@ -43,7 +45,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: astral-sh/setup-uv@v9
+      # Exact release tag on purpose: astral-sh/setup-uv publishes floating major
+      # tags only up to v7, so @v9 does not resolve ("unable to find version v9").
+      - uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
 
