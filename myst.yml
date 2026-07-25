@@ -11,6 +11,7 @@ project:
     - title: Notebooks
       children:
         - file: notebooks/virtualizarr_V2_example.ipynb
+        - file: notebooks/reference-generation/read-jasmin-icechunk-over-https.ipynb
     - file: docs/contributing.md
 site:
   title: ESGF Virtual Zarr Data Access
