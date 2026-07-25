@@ -26,17 +26,6 @@ collection_counts("https://api.stac.esgf.ceda.ac.uk")
 East (CEDA) and West federations. `notebooks/catalog-discovery/catalog-check.ipynb`
 prints the full matrix in one go.
 
-Two server-side quirks are handled inside `collection_counts`, so callers do not
-have to know about them:
-
-- `/collections` can return **HTTP 500 as a whole** when a *single* collection
-  document fails to serialise — West integration's `obs4ref` does exactly this.
-  Discovery falls back to the root catalog's `child` links, which name each
-  collection separately.
-- West advertises lowercase collection ids (`cmip6plus`) but stores items under
-  the canonical DRS case (`CMIP6Plus`), and `/search` is **case-sensitive**. The
-  collection title is searched alongside the id, with a full-item tally as a
-  last-resort reconciliation.
 
 ### Running the tests
 
