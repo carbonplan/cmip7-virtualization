@@ -35,6 +35,7 @@ dependencies = [
     "onepassword-sdk>=0.4.0",
     "pystac>=1.10",
     "xpystac",
+    "obspec-utils>=0.9.0",
 ]
 
 [tool.uv]
