@@ -4,13 +4,40 @@ from typing import List
 
 import xarray as xr
 from obstore.store import from_url
+from obspec_utils.readers import EagerStoreReader
+from obspec_utils.wrappers import CachingReadableStore
 from virtualizarr.parsers import HDFParser
 from virtualizarr.registry import ObjectStoreRegistry
 from virtualizarr.xarray import open_virtual_mfdataset
+from virtualizarr.manifests import ManifestStore
+from virtualizarr.parsers.hdf.hdf import _construct_manifest_group
+
+# Must exceed one file, or an object is evicted before it can be reused. The
+# obspec-utils default (256 MiB) is smaller than a typical CMIP6 file.
+DEFAULT_CACHE_SIZE = 2 * 1024**3
+
+
+class EagerHDFParser:
+    """HDFParser, but reading through an EagerStoreReader."""
+
+    def __call__(self, url, registry):
+        store, path = registry.resolve(url)
+        reader = EagerStoreReader(store, path)
+        try:
+            group = _construct_manifest_group(filepath=url, reader=reader)
+        finally:
+            reader.close()
+        return ManifestStore(group, registry=registry)
+
+
 
 
 def virtualize_from_urls(
-    urls: List[str], parser=None, *, s3_region: str = "us-east-2"
+    urls: List[str],
+    parser=None,
+    *,
+    s3_region: str = "us-east-2",
+    cache_size: int | None = DEFAULT_CACHE_SIZE,
 ) -> tuple[xr.Dataset, ObjectStoreRegistry]:
     """Virtualize a list of NetCDF/HDF5 URLs into an xarray virtual dataset.
 
@@ -18,16 +45,27 @@ def virtualize_from_urls(
     sources (esgf-world; ``skip_signature`` + ``s3_region``, default ``us-east-2``).
     Returns the virtual dataset and the ObjectStoreRegistry so callers can
     configure icechunk VirtualChunkContainers from ``registry.map.keys()``.
+
+    ``cache_size`` is the per-host byte budget for caching fetched objects, or
+    ``None`` to disable. Without it, loading the ``time`` coordinate costs one
+    range request *per timestep* (12,606 on a typical CMIP6 file). Keep it above
+    the size of a single file, or objects are evicted as fast as they arrive.
     """
     if parser is None:
-        parser = HDFParser()
+        # pass HDFParser() as argument to restore the non optimized version
+        parser = EagerHDFParser()
 
     def _store_for(bucket: str):
+        """Anonymous store for one host, read-through cached so bytes arrive once."""
         if bucket.startswith("s3://"):
-            return from_url(bucket, skip_signature=True, region=s3_region)
-        return from_url(bucket)
+            store = from_url(bucket, skip_signature=True, region=s3_region)
+        else:
+            store = from_url(bucket)
+        if cache_size:
+            store = CachingReadableStore(store, max_size=cache_size)
+        return store
 
-    buckets = set("/".join(url.split("/")[:3]) for url in urls)
+    buckets = {"/".join(url.split("/")[:3]) for url in urls}
     registry = ObjectStoreRegistry({bucket: _store_for(bucket) for bucket in buckets})
 
     vds = open_virtual_mfdataset(
@@ -36,6 +74,7 @@ def virtualize_from_urls(
         registry=registry,
         coords='minimal',
         compat='override',
-        # loadable_variables=['time','lon','lat','something']# we can apparently add values that are not found as dimensions here. 
+        loadable_variables=['time', 'lon', 'lat', 'something_that_i_never_expect']
+        # we might want to add more variables here. We can apparently also include variables that might not be in the data dimensions! That will be handy for e.g. depth dimensions.
     )
     return vds, registry
