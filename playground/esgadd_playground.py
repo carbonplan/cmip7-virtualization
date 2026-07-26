@@ -209,7 +209,8 @@ def submit(
     see README "How it actually works"). We surface that 405 as the *expected*
     outcome rather than crashing, and point at ``post-full`` as the working
     catalog-side workaround. (Production East reportedly supports PATCH; landing
-    the reference for real needs a transaction API that does — see plan.md.)
+    the reference for real needs a transaction API that does — see
+    ``internal/todos/todos.md``.)
     """
     if agg_url is None:
         agg_url = osn_store_href(item_id)
@@ -245,7 +246,7 @@ def submit(
                 "local Playground image does not support item-level PATCH (POST/PUT "
                 "only). esgadd itself ran correctly and sent the right request.\n"
                 "   → use `post-full` to land the reference via POST/PUT, or point "
-                "esgadd at a transaction API that supports PATCH (see README/plan.md)."
+                "esgadd at a transaction API that supports PATCH (see README)."
             )
             return
         raise SystemExit(f"esgadd exited {proc.returncode}")

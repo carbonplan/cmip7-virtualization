@@ -109,18 +109,35 @@ catalog, keep Items with reachable-host NetCDF, mirror into the Playground) and
 the Item's NetCDF into an Icechunk store **on OSN** (AWS-S3 target commented out);
 **submit** runs `esgadd --agg icechunk --agg-url <public OSN URL>`.
 
-**Source catalog (2026-06-09):** CEDA East prod (`api.stac.esgf.ceda.ac.uk`) is
-**empty** — we source Items from live **ESGF-West discovery**
-(`discovery.integration.esgf-west.org`); it has no kerchunk refs and many dummy
-hrefs, so we filter to `REACHABLE_HOSTS` (ornl/nci/nird).
+**Source catalog (re-probed 2026-07-25):** CEDA East prod
+(`api.stac.esgf.ceda.ac.uk`) is **now populated** — 391,729 items (CMIP6 390,739,
+CORDEX-CMIP6 990, CMIP7 0) — so the original premise for sourcing from West is
+gone; `prepopulate.py` still points at **ESGF-West discovery**
+(`discovery.integration.esgf-west.org`, now ~8,587 items) and filters to
+`REACHABLE_HOSTS` (ornl/nci/nird) because West has many dummy hrefs. East test
+(`api.stac.esgf-test.ceda.ac.uk`, 29,525 items) is reachable again but its
+kerchunk `reference_file` assets have **disappeared**. No catalog currently
+serves reference assets. West **production** (`discovery.production.esgf-west.org`)
+is genuinely empty (0 items, not a client bug) and
+`integration-testing.api.stac.esgf-west.org` is dead (NXDOMAIN) — removed from
+`STAC_BASES`. See `internal/todos/todos.md` for the live table.
 
-**Two known blockers (see `playground/README.md` + `plan.md`):** (1) esgadd
-(`esgf-ng-v5.4a`) needs 3 packaging-bug workarounds to `pip install` (version-at-
-build-time; typo'd dep `wcrp-cc-plugi`; undeclared `esgvoc`). (2) The local
-Playground image (`djspstfc/stac-fastapi-es:1.0`) **rejects PATCH (HTTP 405)** —
-POST/PUT only — so esgadd's reference can't land locally (it runs correctly and
-emits the right request). Install `esgadd` in a SEPARATE env (conflicting deps).
-README also lists the 7 esgadd semantic quirks to file upstream.
+⚠️ **The `playground/` + `esgadd` route is a local experiment, not the publication
+path.** Real submission is `esgpublish` with a `stac_config:` block pointing at a
+**Transaction API** (West = Globus auth, East = EGI Check-in device flow); both
+federations are documented step-by-step in
+[`ESGF/esgf-ng-onboarding`](https://github.com/ESGF/esgf-ng-onboarding). East
+*does* implement PATCH — the Playground's HTTP 405 says nothing about the real
+catalogs. See `internal/todos/todos.md` (Track 1) for endpoints, working
+`esg.yaml` stanzas, and the live probe table.
+
+Two blockers local to the playground demo: (1) esgadd (`esgf-ng-v5.4a`) needs 3
+packaging-bug workarounds to `pip install` (version-at-build-time; typo'd dep
+`wcrp-cc-plugi`; undeclared `esgvoc`) — install it in a SEPARATE env (conflicting
+deps). (2) The Playground image (`djspstfc/stac-fastapi-es:1.0`) **rejects PATCH
+(HTTP 405)**, POST/PUT only, so esgadd's reference can't land locally (it runs
+correctly and emits the right request). `playground/README.md` also lists the 7
+esgadd semantic quirks to file upstream.
 
 **Key libraries:**
 - `virtualizarr` — installed from git HEAD (not PyPI); entry points: `open_virtual_dataset`, `open_virtual_mfdataset`, `HDFParser`, `ObjectStoreRegistry`
@@ -131,6 +148,15 @@ README also lists the 7 esgadd semantic quirks to file upstream.
 - `kerchunk` — legacy format support (JSON/parquet)
 
 **Docs:** MyST-MD site with source in `docs/` and `notebooks/`. Config in `myst.yml`. Deployed to GitHub Pages via `.github/workflows/deploy-docs.yml` on push to `main`. Notebooks are rendered statically (not re-executed in CI).
+
+**padocc icechunk integration (Track 2) — lives OUTSIDE this repo.** Fork
+`jbusecke/padocc`, branch `icechunk-compute`, at `~/Code/padocc` (venv `kvenv/`,
+`./kvenv/bin/python -m pytest padocc/tests/ --ignore=padocc/tests/test_project.py`).
+Implemented + green, **not pushed**. Local-filesystem only; helpers **vendored** into
+`padocc/phases/icechunk_store.py` (padocc is py≥3.11 + PyPI virtualizarr, so it cannot
+depend on this package). Blocker before PR: regenerate `poetry.lock`. Full status,
+the 3 pre-existing padocc bugs it fixes, and the PR argument: `internal/todos/todos.md`
+(Track 2) and `~/.claude/plans/make-a-plan-how-streamed-tome.md`.
 
 **Output directories:**
 - `refs/` — intermediate and final reference files (parquet, icechunk repo)

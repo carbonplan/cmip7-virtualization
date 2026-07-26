@@ -166,3 +166,7 @@ combined_full.json
 notebooks/temp_test/
 # git worktrees (see CLAUDE.md "Worktree workflow")
 .worktrees/
+# internal working notes -- see internal/ (not shipped)
+internal/**
+# large local test data (IPSL CMIP7 branded-variable files, ~1.6 GB)
+notebooks/reference-generation/data/
