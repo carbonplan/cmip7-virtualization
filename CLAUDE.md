@@ -100,14 +100,41 @@ Demo: `notebooks/reference-generation/read-jasmin-icechunk-over-https.ipynb`.
 `virtual_prefixes` are the hosts the *chunk manifests* point at — omit them and the
 metadata opens fine while every array read fails.
 
-**Catalog submission demo (`playground/`):** Track C end-to-end — attach an
-Icechunk reference asset to a STAC Item using the production tool `esgadd`
-against the local [ESGF-Playground](https://github.com/ESGF/ESGF-Playground),
-no auth. Two modules: `prepopulate.py` (factored-out *seed* — query a live
-catalog, keep Items with reachable-host NetCDF, mirror into the Playground) and
-`esgadd_playground.py` (`seed → build → submit → verify`). **build** virtualizes
-the Item's NetCDF into an Icechunk store **on OSN** (AWS-S3 target commented out);
-**submit** runs `esgadd --agg icechunk --agg-url <public OSN URL>`.
+**Catalog submission demo (`playground/`):** Track C — attach a kerchunk/Icechunk
+reference asset to a STAC Item using the production tool `esgadd`, no auth.
+
+*Part 1 — validating mirror (the useful one).* `validating_stac_server.py` is a
+FastAPI stub mirroring [`ESGF/stac-transaction-api`](https://github.com/ESGF/stac-transaction-api)
+(`3b472fe`) — same validation entry points, 202/RFC-9457 responses, and the **real
+published JSON Schemas** (offline cache in `src/cmip7_virtualization/schema_cache/`,
+refreshed by `playground/refresh_schemas.py`). The stock Playground image can't do
+this job: it 405s on PATCH *and* validates nothing. Two modes: `faithful`
+(reproduces production exactly) and `strict` (also validates the *patched* Item —
+the check production omits). `agg_demo.py` drives `esgadd --agg kerchunk` then
+`--agg icechunk` against it; without `--esgadd` it falls back to
+`esgadd_ops.add_aggregate_ops`, a replica verified byte-identical to the binary.
+
+Package modules: `stac_validation.py` (ported `validate_patch`/`validate_post`/
+`operation_to_partial_item`/`validate_extensions`, each upstream bug marked and
+reproduced) and `esgadd_ops.py` (esgadd's patch construction). Both offline-testable;
+`tests/test_stac_validation.py` is 36 offline tests, several of which deliberately
+**pin upstream bugs** — if one fails, upstream fixed something.
+
+⚠️ **Headline finding (2026-07-26):** `esgadd --agg` emits an asset with **no
+`protocol`**, which every ESGF project schema requires of every asset → the
+patched Item **fails POST validation** (`'protocol' is a required property`).
+Production accepts it anyway because `validate_patch` skips `oneOf` errors and all
+asset validation lives inside the schema's top-level `oneOf` — PATCH validation is
+inert. Worse for icechunk: `protocol`'s enum has `kerchunk` but **no `icechunk`**,
+so no icechunk asset can validate until the *schema* changes. The **two-aggregation
+case is broken**: the 2nd `--agg` targets `/assets/reference_file/alternate/{site}`
+without creating `alternate` first → invalid RFC-6902. Also: `esgadd` **always exits
+1**, even on a 202. 16 filable upstream bugs + the publish-time analysis (PR #303,
+`convert2stac`, the minimal change set) are in `playground/README.md`.
+
+*Part 2 — original Playground flow.* `prepopulate.py` (seed from a live catalog)
+and `esgadd_playground.py` (`seed → build → submit → verify`). **build** virtualizes
+the Item's NetCDF into an Icechunk store **on OSN** (AWS-S3 target commented out).
 
 **Source catalog (re-probed 2026-07-25):** CEDA East prod
 (`api.stac.esgf.ceda.ac.uk`) is **now populated** — 391,729 items (CMIP6 390,739,
@@ -131,13 +158,15 @@ federations are documented step-by-step in
 catalogs. See `internal/todos/todos.md` (Track 1) for endpoints, working
 `esg.yaml` stanzas, and the live probe table.
 
-Two blockers local to the playground demo: (1) esgadd (`esgf-ng-v5.4a`) needs 3
-packaging-bug workarounds to `pip install` (version-at-build-time; typo'd dep
-`wcrp-cc-plugi`; undeclared `esgvoc`) — install it in a SEPARATE env (conflicting
-deps). (2) The Playground image (`djspstfc/stac-fastapi-es:1.0`) **rejects PATCH
-(HTTP 405)**, POST/PUT only, so esgadd's reference can't land locally (it runs
-correctly and emits the right request). `playground/README.md` also lists the 7
-esgadd semantic quirks to file upstream.
+Two blockers local to the playground demo: (1) esgadd needs 3 packaging-bug
+workarounds to install (version-at-build-time; typo'd dep `wcrp-cc-plugi`;
+undeclared `esgvoc`) — **still broken on `main` @ `59bb778`**; install it in a
+SEPARATE env (conflicting deps), recipe in `playground/README.md`. (2) The
+Playground image (`djspstfc/stac-fastapi-es:1.0`) **rejects PATCH (HTTP 405)**,
+POST/PUT only — which is why `validating_stac_server.py` exists. Note the real
+Transaction API at HEAD also fails every PATCH: `client.py` L215 calls
+`validate_patch` with 3 of its 5 required args → `TypeError` → HTTP 500
+(upstream issue #41).
 
 **Key libraries:**
 - `virtualizarr` — installed from git HEAD (not PyPI); entry points: `open_virtual_dataset`, `open_virtual_mfdataset`, `HDFParser`, `ObjectStoreRegistry`

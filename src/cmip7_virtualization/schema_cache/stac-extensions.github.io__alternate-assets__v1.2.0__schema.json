@@ -1,0 +1,150 @@
+{
+ "$id": "https://stac-extensions.github.io/alternate-assets/v1.2.0/schema.json#",
+ "$schema": "http://json-schema.org/draft-07/schema#",
+ "definitions": {
+  "alternate_assets": {
+   "additionalProperties": {
+    "allOf": [
+     {
+      "$comment": "Require href in alternate assets in normal assets",
+      "properties": {
+       "href": {
+        "format": "iri-reference",
+        "minLength": 1,
+        "type": "string"
+       }
+      },
+      "required": [
+       "href"
+      ],
+      "type": "object"
+     },
+     {
+      "$ref": "#/definitions/object_without_href"
+     }
+    ]
+   },
+   "minProperties": 1,
+   "type": "object"
+  },
+  "alternate_item_assets": {
+   "additionalProperties": {
+    "allOf": [
+     {
+      "$comment": "Disallow href in alternate assets in item assets",
+      "properties": {
+       "href": {
+        "not": {}
+       }
+      },
+      "type": "object"
+     },
+     {
+      "$ref": "#/definitions/object_without_href"
+     }
+    ]
+   },
+   "minProperties": 1,
+   "type": "object"
+  },
+  "assets": {
+   "additionalProperties": {
+    "properties": {
+     "alternate": {
+      "$ref": "#/definitions/alternate_assets"
+     },
+     "alternate:name": {
+      "$ref": "#/definitions/name"
+     }
+    },
+    "type": "object"
+   },
+   "type": "object"
+  },
+  "name": {
+   "minLength": 1,
+   "type": "string"
+  },
+  "object_without_href": {
+   "allOf": [
+    {
+     "$ref": "https://schemas.stacspec.org/v1.0.0/item-spec/json-schema/basics.json"
+    }
+   ],
+   "properties": {
+    "alternate:name": {
+     "$ref": "#/definitions/name"
+    }
+   },
+   "type": "object"
+  }
+ },
+ "description": "STAC Alternate Assets Extension for STAC Items and STAC Collections.",
+ "oneOf": [
+  {
+   "$comment": "This is the schema for STAC Items.",
+   "properties": {
+    "assets": {
+     "properties": {
+      "alternate": {
+       "$ref": "#/definitions/alternate_assets"
+      },
+      "alternate:name": {
+       "$ref": "#/definitions/name"
+      }
+     },
+     "type": "object"
+    },
+    "type": {
+     "const": "Feature"
+    }
+   },
+   "required": [
+    "type",
+    "assets"
+   ],
+   "type": "object"
+  },
+  {
+   "$comment": "This is the schema for STAC Collections.",
+   "properties": {
+    "assets": {
+     "$ref": "#/definitions/assets"
+    },
+    "item_assets": {
+     "additionalProperties": {
+      "properties": {
+       "alternate": {
+        "$ref": "#/definitions/alternate_item_assets"
+       },
+       "alternate:name": {
+        "$ref": "#/definitions/name"
+       }
+      }
+     },
+     "type": "object"
+    },
+    "type": {
+     "const": "Collection"
+    }
+   },
+   "required": [
+    "type"
+   ],
+   "type": "object"
+  }
+ ],
+ "properties": {
+  "stac_extensions": {
+   "contains": {
+    "const": "https://stac-extensions.github.io/alternate-assets/v1.2.0/schema.json"
+   },
+   "type": "array"
+  }
+ },
+ "required": [
+  "stac_extensions"
+ ],
+ "title": "Alternate Assets Extension",
+ "type": "object"
+}

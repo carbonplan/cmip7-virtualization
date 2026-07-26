@@ -1,0 +1,134 @@
+{
+ "assets": {
+  "zg500_AERday_UKESM1-0-LL_ssp585_r1i1p1f2_gn_20150101-20491230.nc": {
+   "alternate:name": "ceda.ac.uk",
+   "cmip6:tracking_id": "hdl:21.14100/67d4bba1-c060-414a-820f-febe2dbfc694",
+   "created": "2019-07-24T11:00:55Z",
+   "description": "HTTPServer Link",
+   "file:checksum": "122096104557d59d4c302c33d0762d2aecc760b2e11da9948b0f4c85a248126a2107",
+   "file:local_path": "CMIP6/ScenarioMIP/MOHC/UKESM1-0-LL/ssp585/r1i1p1f2/AERday/zg500/gn/v20190726/zg500_AERday_UKESM1-0-LL_ssp585_r1i1p1f2_gn_20150101-20491230.nc",
+   "file:size": 680849663,
+   "href": "https://dap.ceda.ac.uk/badc/cmip6/data/CMIP6/ScenarioMIP/MOHC/UKESM1-0-LL/ssp585/r1i1p1f2/AERday/zg500/gn/v20190726/zg500_AERday_UKESM1-0-LL_ssp585_r1i1p1f2_gn_20150101-20491230.nc",
+   "protocol": "https",
+   "roles": [
+    "data"
+   ],
+   "type": "application/netcdf",
+   "updated": "2019-07-26T20:16:21Z"
+  },
+  "zg500_AERday_UKESM1-0-LL_ssp585_r1i1p1f2_gn_20500101-21001230.nc": {
+   "alternate:name": "ceda.ac.uk",
+   "cmip6:tracking_id": "hdl:21.14100/a781efa7-7ecd-4519-b352-ae715f5ef902",
+   "created": "2019-07-24T12:47:43Z",
+   "description": "HTTPServer Link",
+   "file:checksum": "12204c84725ee5cba7b612345bcb0f48c7ae1d7290c691d5bde1665ab5462a3d8097",
+   "file:local_path": "CMIP6/ScenarioMIP/MOHC/UKESM1-0-LL/ssp585/r1i1p1f2/AERday/zg500/gn/v20190726/zg500_AERday_UKESM1-0-LL_ssp585_r1i1p1f2_gn_20500101-21001230.nc",
+   "file:size": 989326527,
+   "href": "https://dap.ceda.ac.uk/badc/cmip6/data/CMIP6/ScenarioMIP/MOHC/UKESM1-0-LL/ssp585/r1i1p1f2/AERday/zg500/gn/v20190726/zg500_AERday_UKESM1-0-LL_ssp585_r1i1p1f2_gn_20500101-21001230.nc",
+   "protocol": "https",
+   "roles": [
+    "data"
+   ],
+   "type": "application/netcdf",
+   "updated": "2019-07-26T20:16:11Z"
+  }
+ },
+ "bbox": [
+  -179.0625,
+  -89.375,
+  179.0625,
+  89.375
+ ],
+ "collection": "CMIP6",
+ "geometry": {
+  "coordinates": [
+   [
+    [
+     -179.0625,
+     -89.375
+    ],
+    [
+     179.0625,
+     -89.375
+    ],
+    [
+     179.0625,
+     89.375
+    ],
+    [
+     -179.0625,
+     89.375
+    ],
+    [
+     -179.0625,
+     -89.375
+    ]
+   ]
+  ],
+  "type": "Polygon"
+ },
+ "id": "CMIP6.ScenarioMIP.MOHC.UKESM1-0-LL.ssp585.r1i1p1f2.AERday.zg500.gn.v20190726",
+ "properties": {
+  "base_id": "CMIP6.ScenarioMIP.MOHC.UKESM1-0-LL.ssp585.r1i1p1f2.AERday.zg500.gn",
+  "cmip6:Conventions": [
+   "CF-1.7",
+   "CMIP-6.2"
+  ],
+  "cmip6:activity_id": [
+   "ScenarioMIP"
+  ],
+  "cmip6:data_specs_version": "01.00.29",
+  "cmip6:experiment": "Future scenario with high radiative forcing by the end of century. Following approximately RCP8.5 global forcing pathway but with new forcing based on SSP5. Concentration-driven. As a tier 2 option, this simulation should be extended to year 2300",
+  "cmip6:experiment_id": "ssp585",
+  "cmip6:forcing_index": "2",
+  "cmip6:frequency": "day",
+  "cmip6:grid_label": "gn",
+  "cmip6:initialization_index": "1",
+  "cmip6:institution": "Met Office Hadley Centre, Fitzroy Road, Exeter, Devon, EX1 3PB, UK",
+  "cmip6:institution_id": "MOHC",
+  "cmip6:member_id": "s2019-r1i1p1f2",
+  "cmip6:mip_era": "CMIP6",
+  "cmip6:nominal_resolution": "250 km",
+  "cmip6:physics_index": "1",
+  "cmip6:pid": "hdl:21.14100/d94de180-11dc-3af7-893c-53427a9b7385",
+  "cmip6:product": "model-output",
+  "cmip6:realization_index": "1",
+  "cmip6:realm": [
+   "aerosol"
+  ],
+  "cmip6:source": "UKESM1.0-N96ORCA1",
+  "cmip6:source_id": "UKESM1-0-LL",
+  "cmip6:source_type": [
+   "AOGCM",
+   "AER",
+   "BGC",
+   "CHEM"
+  ],
+  "cmip6:sub_experiment": "none",
+  "cmip6:sub_experiment_id": "none",
+  "cmip6:table_id": "AERday",
+  "cmip6:variable_cf_standard_name": "geopotential_height",
+  "cmip6:variable_id": "zg500",
+  "cmip6:variable_long_name": "Geopotential Height at 500hPa",
+  "cmip6:variable_units": "m",
+  "cmip6:variant_label": "r1i1p1f2",
+  "created": "2026-07-23T14:03:11.261332Z",
+  "datetime": null,
+  "end_datetime": "2100-12-30T12:00:00Z",
+  "latest": true,
+  "license": "CC0-1.0",
+  "retracted": false,
+  "size": 1670176190,
+  "start_datetime": "2015-01-01T12:00:00Z",
+  "title": "CMIP6.ScenarioMIP.MOHC.UKESM1-0-LL.ssp585.r1i1p1f2.AERday.zg500.gn",
+  "updated": "2026-07-23T14:03:11.267208Z",
+  "version": "20190726"
+ },
+ "stac_extensions": [
+  "https://stac-extensions.github.io/alternate-assets/v1.2.0/schema.json",
+  "https://stac-extensions.github.io/file/v2.1.0/schema.json",
+  "https://esgf.github.io/stac-transaction-api/cmip6/v2.0.0/schema.json"
+ ],
+ "stac_version": "1.1.0",
+ "type": "Feature"
+}

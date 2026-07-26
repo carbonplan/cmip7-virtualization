@@ -1,0 +1,182 @@
+{
+ "$id": "https://stac-extensions.github.io/file/v2.1.0/schema.json#",
+ "$schema": "http://json-schema.org/draft-07/schema#",
+ "definitions": {
+  "fields": {
+   "$comment": "Add your new fields here. Don't require them here, do that above in the item schema.",
+   "additionalProperties": false,
+   "patternProperties": {
+    "^(?!file:)": {
+     "$comment": "Above, change `template` to the prefix of this extension"
+    }
+   },
+   "properties": {
+    "file:byte_order": {
+     "enum": [
+      "big-endian",
+      "little-endian"
+     ],
+     "title": "File Byte Order",
+     "type": "string"
+    },
+    "file:checksum": {
+     "pattern": "^[a-f0-9]+$",
+     "title": "File Checksum (Multihash)",
+     "type": "string"
+    },
+    "file:header_size": {
+     "minimum": 0,
+     "title": "File Header Size",
+     "type": "integer"
+    },
+    "file:local_path": {
+     "pattern": "^[^\\r\\n\\t\\\\:'\"/]+(/[^\\r\\n\\t\\\\:'\"/]+)*/?$",
+     "title": "Relative File Path",
+     "type": "string"
+    },
+    "file:size": {
+     "minimum": 0,
+     "title": "File Size",
+     "type": "integer"
+    },
+    "file:values": {
+     "items": {
+      "properties": {
+       "summary": {
+        "minLength": 1,
+        "type": "string"
+       },
+       "values": {
+        "items": {
+         "description": "Any data type is allowed"
+        },
+        "minItems": 1,
+        "type": "array"
+       }
+      },
+      "required": [
+       "values",
+       "summary"
+      ],
+      "type": "object"
+     },
+     "minItems": 1,
+     "type": "array"
+    }
+   },
+   "type": "object"
+  },
+  "stac_extensions": {
+   "properties": {
+    "stac_extensions": {
+     "contains": {
+      "const": "https://stac-extensions.github.io/file/v2.1.0/schema.json"
+     },
+     "type": "array"
+    }
+   },
+   "required": [
+    "stac_extensions"
+   ],
+   "type": "object"
+  }
+ },
+ "description": "STAC File Info Extension for STAC Items, STAC Catalogs, and STAC Collections.",
+ "oneOf": [
+  {
+   "$comment": "This is the schema for STAC Items.",
+   "allOf": [
+    {
+     "properties": {
+      "assets": {
+       "additionalProperties": {
+        "$ref": "#/definitions/fields"
+       },
+       "type": "object"
+      },
+      "links": {
+       "items": {
+        "$ref": "#/definitions/fields"
+       },
+       "type": "array"
+      },
+      "type": {
+       "const": "Feature"
+      }
+     },
+     "required": [
+      "type",
+      "assets"
+     ],
+     "type": "object"
+    },
+    {
+     "$ref": "#/definitions/stac_extensions"
+    }
+   ]
+  },
+  {
+   "$comment": "This is the schema for STAC Catalogs.",
+   "allOf": [
+    {
+     "properties": {
+      "links": {
+       "items": {
+        "$ref": "#/definitions/fields"
+       },
+       "type": "array"
+      },
+      "type": {
+       "const": "Catalog"
+      }
+     },
+     "required": [
+      "type"
+     ],
+     "type": "object"
+    },
+    {
+     "$ref": "#/definitions/stac_extensions"
+    }
+   ]
+  },
+  {
+   "$comment": "This is the schema for STAC Collections.",
+   "allOf": [
+    {
+     "properties": {
+      "assets": {
+       "additionalProperties": {
+        "$ref": "#/definitions/fields"
+       },
+       "type": "object"
+      },
+      "item_assets": {
+       "additionalProperties": {
+        "$ref": "#/definitions/fields"
+       },
+       "type": "object"
+      },
+      "links": {
+       "items": {
+        "$ref": "#/definitions/fields"
+       },
+       "type": "array"
+      },
+      "type": {
+       "const": "Collection"
+      }
+     },
+     "required": [
+      "type"
+     ],
+     "type": "object"
+    },
+    {
+     "$ref": "#/definitions/stac_extensions"
+    }
+   ]
+  }
+ ],
+ "title": "File Info Extension"
+}

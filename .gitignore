@@ -170,3 +170,6 @@ notebooks/temp_test/
 internal/**
 # large local test data (IPSL CMIP7 branded-variable files, ~1.6 GB)
 notebooks/reference-generation/data/
+
+# playground/agg_demo.py scratch (generated esgadd config)
+playground/.demo/

@@ -1,0 +1,18 @@
+{
+ "$id": "https://schemas.stacspec.org/v1.0.0/item-spec/json-schema/basics.json#",
+ "$schema": "http://json-schema.org/draft-07/schema#",
+ "properties": {
+  "description": {
+   "description": "Detailed multi-line description to fully explain the Item.",
+   "title": "Item Description",
+   "type": "string"
+  },
+  "title": {
+   "description": "A human-readable title describing the Item.",
+   "title": "Item Title",
+   "type": "string"
+  }
+ },
+ "title": "Basic Descriptive Fields",
+ "type": "object"
+}

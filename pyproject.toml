@@ -36,6 +36,8 @@ dependencies = [
     "pystac>=1.10",
     "xpystac",
     "obspec-utils>=0.9.0",
+    "jsonschema>=4.26.0",
+    "jsonpatch>=1.33",
 ]
 
 [tool.uv]
@@ -46,7 +48,9 @@ docs = [
     "mystmd",
 ]
 dev = [
+    "fastapi>=0.140.0",
     "pytest>=8",
+    "uvicorn>=0.51.0",
 ]
 
 [tool.pytest.ini_options]
