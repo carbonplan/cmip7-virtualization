@@ -10,7 +10,10 @@ virtualizarr ``ObjectStoreRegistry``, covering both anonymous HTTP sources (CEDA
 Thredds / dap.ceda.ac.uk) and anonymous S3 sources (esgf-world, ``us-east-2``).
 """
 
-from typing import Dict, Iterable, List
+import os
+from collections.abc import Iterable
+from pathlib import Path
+from urllib.parse import urlparse
 
 import icechunk as ic
 from virtualizarr.registry import ObjectStoreRegistry
@@ -18,13 +21,16 @@ from virtualizarr.registry import ObjectStoreRegistry
 # esgf-world (the public West/DOE CMIP6 S3 mirror) lives in us-east-2.
 ESGF_WORLD_REGION = "us-east-2"
 
+#: OSN/Ceph gateway used by this project.
+OSN_ENDPOINT_URL = "https://nyu1.osn.mghpcc.org"
+
 
 def osn_storage(bucket, prefix, access_key_id, secret_access_key) -> ic.Storage:
     """Icechunk storage on OSN/Ceph (S3-compatible) with static keys."""
     return ic.s3_storage(
         bucket=bucket,
         prefix=prefix,
-        endpoint_url="https://nyu1.osn.mghpcc.org",
+        endpoint_url=OSN_ENDPOINT_URL,
         region="us-east-1",  # required even for non-AWS
         access_key_id=access_key_id,
         secret_access_key=secret_access_key,
@@ -48,8 +54,37 @@ def aws_s3_storage(bucket, prefix, region, *, anonymous: bool = False) -> ic.Sto
     )
 
 
-def _prefixes(registry: ObjectStoreRegistry) -> List[str]:
+def _prefixes(registry: ObjectStoreRegistry) -> list[str]:
     return [f"{k.scheme}://{k.netloc}/" for k in registry.map.keys()]
+
+
+def local_url_prefix(paths: Iterable[str | os.PathLike]) -> str:
+    """Deepest ``file:///.../`` directory prefix containing every path in *paths*.
+
+    Needed because a registry key carries only ``(scheme, netloc)``, so a local store
+    always reduces to the bare prefix ``file:///`` — and icechunk **rejects** that:
+    a ``file://`` virtual-chunk container must name a real directory and end in ``/``
+    (``ValueError: Url prefix for file:// containers must include a path``). The
+    directory therefore has to be recovered from the source paths themselves.
+    """
+    paths = list(paths)
+    if not paths:
+        raise ValueError("need at least one path to derive a local url prefix")
+    dirs = []
+    for p in paths:
+        text = os.fspath(p)
+        if urlparse(text).scheme == "file":
+            text = urlparse(text).path
+        dirs.append(str(Path(text).expanduser().resolve().parent))
+    return Path(os.path.commonpath(dirs)).as_uri() + "/"
+
+
+def local_vcc(url_prefix: str) -> ic.VirtualChunkContainer:
+    """Virtual-chunk container for NetCDF sources sitting on the local filesystem."""
+    root = urlparse(url_prefix).path
+    return ic.VirtualChunkContainer(
+        url_prefix=url_prefix, store=ic.local_filesystem_store(root)
+    )
 
 
 def open_http_repository(
@@ -90,23 +125,48 @@ def vccs_from_registry(
     *,
     s3_region: str = ESGF_WORLD_REGION,
     s3_anonymous: bool = True,
-) -> List[ic.VirtualChunkContainer]:
+    s3_endpoint_url: str | None = None,
+    local_prefixes: Iterable[str] = (),
+) -> list[ic.VirtualChunkContainer]:
     """Build a VirtualChunkContainer per source host in the registry.
 
     ``http(s)://`` hosts get an ``http_store`` (anonymous); ``s3://`` hosts get an
-    ``s3_store`` (anonymous + ``s3_region`` by default, suited to esgf-world).
+    ``s3_store`` (anonymous + ``s3_region`` by default, suited to esgf-world; pass
+    ``s3_endpoint_url`` for an S3-compatible gateway such as OSN).
+
+    Local (``file://``) sources need ``local_prefixes`` — one or more
+    ``file:///dir/`` prefixes, e.g. from :func:`local_url_prefix` — because the
+    registry cannot carry the directory and icechunk will not accept ``file:///``.
     """
+    local_prefixes = list(local_prefixes)
     vccs = []
     for url_prefix in _prefixes(registry):
+        if url_prefix.startswith("file://"):
+            if not local_prefixes:
+                raise ValueError(
+                    "registry contains local (file://) sources; pass local_prefixes="
+                    "[local_url_prefix(paths)] — icechunk rejects a bare 'file:///' "
+                    "virtual-chunk container prefix"
+                )
+            vccs.extend(local_vcc(p) for p in local_prefixes)
+            continue
         if url_prefix.startswith("s3://"):
-            store = ic.s3_store(region=s3_region, anonymous=s3_anonymous)
+            store = ic.s3_store(
+                region=s3_region,
+                anonymous=s3_anonymous,
+                endpoint_url=s3_endpoint_url,
+                s3_compatible=bool(s3_endpoint_url),
+                force_path_style=bool(s3_endpoint_url),
+            )
         else:
             store = ic.http_store()
         vccs.append(ic.VirtualChunkContainer(url_prefix=url_prefix, store=store))
     return vccs
 
 
-def http_vccs_from_registry(registry: ObjectStoreRegistry) -> List[ic.VirtualChunkContainer]:
+def http_vccs_from_registry(
+    registry: ObjectStoreRegistry,
+) -> list[ic.VirtualChunkContainer]:
     """Back-compat wrapper — HTTP-only virtual-chunk containers.
 
     Prefer :func:`vccs_from_registry`, which also handles S3 sources.
@@ -119,20 +179,31 @@ def http_vccs_from_registry(registry: ObjectStoreRegistry) -> List[ic.VirtualChu
 
 def authorize_prefixes_from_registry(
     registry: ObjectStoreRegistry,
-) -> Dict[str, ic.AnyCredential]:
+    *,
+    local_prefixes: Iterable[str] = (),
+) -> dict[str, ic.AnyCredential]:
     """Read-side ``authorize_virtual_chunk_access`` map for ``Repository.open``.
 
     Anonymous HTTP hosts map to ``ic.credentials.HttpAccess``; anonymous S3 hosts
-    (esgf-world) map to ``ic.s3_anonymous_credentials()``.
+    (esgf-world) map to ``ic.s3_anonymous_credentials()``; each ``local_prefixes``
+    entry maps to ``ic.credentials.LocalFileSystemAccess``. Keys must match the
+    container prefixes from :func:`vccs_from_registry`, so pass the same
+    ``local_prefixes`` to both.
 
     Icechunk 2 replaced the bare ``None`` sentinel for no-auth containers with
     explicit ones (``HttpAccess``, ``LocalFileSystemAccess``) — ``None`` still
     works but warns, because it could not distinguish "needs no credentials" from
-    "credentials omitted by mistake". See earth-mover/icechunk#2194.
+    "credentials omitted by mistake". See earth-mover/icechunk#2194. Both are
+    module-level *instances*, not classes: ``LocalFileSystemAccess()`` raises
+    ``TypeError: 'builtins.LocalFileSystemAccess' object is not callable``.
     """
-    auth: Dict[str, ic.AnyCredential] = {}
+    local_prefixes = list(local_prefixes)
+    auth: dict[str, ic.AnyCredential] = {}
     for url_prefix in _prefixes(registry):
-        if url_prefix.startswith("s3://"):
+        if url_prefix.startswith("file://"):
+            for p in local_prefixes:
+                auth[p] = ic.credentials.LocalFileSystemAccess
+        elif url_prefix.startswith("s3://"):
             auth[url_prefix] = ic.s3_anonymous_credentials()
         else:
             auth[url_prefix] = ic.credentials.HttpAccess
