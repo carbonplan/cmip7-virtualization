@@ -85,6 +85,34 @@ A research project — scripts and notebooks demonstrating how to create virtual
 - `is_reference_asset(asset)`: substring-matches `kerchunk`/`icechunk` in the media type and the `reference`/`virtual` roles, because publishers disagree on spelling (`application/vnd.zarr+kerchunk` vs our `application/vnd+zarr+kerchunk`).
 - `notebooks/catalog-discovery/catalog-check.ipynb` prints the whole matrix; `tests/test_live_catalogs.py` is the live monitor.
 
+**`virtualize.py` / `storage.py` — local-filesystem sources.** `virtualize_from_urls`
+takes HTTP, `s3://` (add `s3_endpoint_url=` for OSN/Ceph — needs path-style addressing)
+**and local paths**; `as_url()` normalizes bare paths/`Path` to absolute `file://`
+(virtualizarr's registry rejects a schemeless url). Local sources skip the caching
+wrapper and `EagerHDFParser` — eager reads the whole file into RAM for nothing. Four
+traps, all covered by `tests/test_virtualize_local.py` (offline, synthetic NetCDF):
+- Icechunk **rejects `file:///`** as a virtual-chunk prefix (must be a real dir ending
+  in `/`; error raised by `set_virtual_chunk_container`, not the ctor). Registry keys
+  only hold `(scheme, netloc)`, so use `storage.local_url_prefix(paths)` and pass
+  `local_prefixes=` to `vccs_from_registry` / `authorize_prefixes_from_registry`.
+- `data_vars` defaults to **`"minimal"`**, not xarray's `"all"`, which broadcasts static
+  grid vars along time (IPSL `bounds_nav_lon`: 1.9 MB → 3.7 GB of duplicate refs).
+- **Every dimension coordinate must be in `loadable_variables`** or `combine_by_coords`
+  aborts (no index on a ManifestArray) — even for a single file. See
+  `DEFAULT_LOADABLE_VARIABLES`; the cryptic xarray error is re-raised with the fix.
+- `ic.credentials.LocalFileSystemAccess` / `HttpAccess` are **instances, not classes** —
+  calling them raises `TypeError`.
+
+Worked example, executed with outputs:
+`notebooks/reference-generation/local-ref-generation-ipsl.ipynb` (real IPSL CMIP7 files;
+multi-file concat, 4-D single file, `fx` no-time; all work). The OSN follow-on —
+upload commands + `build_on_osn()` behind `RUN_OSN`, **unexecuted** — is split out into
+`notebooks/testing/osn-ref-generation-ipsl.ipynb`.
+**CMIP7 branded-variable filenames** are `<var>_<branding>_<freq>_<region>_<grid>_<source>_<expt>_<variant>[_<time>]` —
+9 fields, and **`table_id` is gone from both the filename and the global attributes**,
+so CMIP6-style instance ids have no slot for it or for the branding suffix. Use the
+`branded_variable` global attribute rather than parsing filenames.
+
 **Two reference-generation patterns:**
 
 1. **HTTP + kerchunk JSON** (`virtual-zarr-script.py`): Opens NetCDF files from ESGF Thredds HTTP URLs as VirtualiZarr virtual datasets, concatenates along time, writes kerchunk JSON. Simple and serial.
