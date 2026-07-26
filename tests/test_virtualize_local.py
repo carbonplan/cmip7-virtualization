@@ -2,8 +2,8 @@
 
 Everything here runs against tiny synthetic NetCDF files written into ``tmp_path``,
 so the whole module is offline and CI-safe. The shapes mirror the three cases in
-``notebooks/testing/local-ref-generation-ipsl.ipynb``: a multi-file time concat, a
-single file, and an ``fx`` file with no time dimension.
+``notebooks/reference-generation/local-ref-generation-ipsl.ipynb``: a multi-file
+time concat, a single file, and an ``fx`` file with no time dimension.
 """
 
 import os

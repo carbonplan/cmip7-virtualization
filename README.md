@@ -59,15 +59,14 @@ Two things to know:
   `bounds_nav_lon` that turned 1.9 MB into 3.7 GB of duplicate chunk references.
 
 A worked end-to-end example against real IPSL CMIP7 files, covering multi-file
-concatenation, a 4-D field, and an `fx` field with no time dimension — plus
-instructions for moving the sources to OSN — is in
-[`notebooks/testing/local-ref-generation-ipsl.ipynb`](notebooks/testing/local-ref-generation-ipsl.ipynb).
+concatenation, a 4-D field, and an `fx` field with no time dimension, is in
+[`notebooks/reference-generation/local-ref-generation-ipsl.ipynb`](notebooks/reference-generation/local-ref-generation-ipsl.ipynb).
 It is committed with its outputs; re-execute it with:
 
 ```bash
 uv run --with nbformat --with nbclient python -c "
 import nbformat; from nbclient import NotebookClient
-p = 'notebooks/testing/local-ref-generation-ipsl.ipynb'
+p = 'notebooks/reference-generation/local-ref-generation-ipsl.ipynb'
 nb = nbformat.read(p, as_version=4)
 NotebookClient(nb, timeout=3600, kernel_name='python3').execute()
 nbformat.write(nb, p)"
@@ -78,7 +77,9 @@ nbformat.write(nb, p)"
 To make a store shareable the *source* NetCDF has to be reachable too — a local store's
 manifests hold absolute paths from one machine. Upload the sources to the OSN bucket,
 then rebuild with `s3_endpoint_url` set so both the reader and the virtual-chunk
-container address the S3-compatible gateway:
+container address the S3-compatible gateway. Runnable scaffolding for the IPSL files —
+upload commands plus a `build_on_osn()` guarded by `RUN_OSN`, **not yet executed** — is in
+[`notebooks/testing/osn-ref-generation-ipsl.ipynb`](notebooks/testing/osn-ref-generation-ipsl.ipynb).
 
 ```bash
 export AWS_ACCESS_KEY_ID=$(op read "op://Work/z6baienaiyhiexztlbbonbeaka/Read-Write/Access_Key")

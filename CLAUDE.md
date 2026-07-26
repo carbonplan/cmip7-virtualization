@@ -103,8 +103,11 @@ traps, all covered by `tests/test_virtualize_local.py` (offline, synthetic NetCD
 - `ic.credentials.LocalFileSystemAccess` / `HttpAccess` are **instances, not classes** —
   calling them raises `TypeError`.
 
-Worked example, executed with outputs: `notebooks/testing/local-ref-generation-ipsl.ipynb`
-(real IPSL CMIP7 files; multi-file concat, 4-D single file, `fx` no-time; all work).
+Worked example, executed with outputs:
+`notebooks/reference-generation/local-ref-generation-ipsl.ipynb` (real IPSL CMIP7 files;
+multi-file concat, 4-D single file, `fx` no-time; all work). The OSN follow-on —
+upload commands + `build_on_osn()` behind `RUN_OSN`, **unexecuted** — is split out into
+`notebooks/testing/osn-ref-generation-ipsl.ipynb`.
 **CMIP7 branded-variable filenames** are `<var>_<branding>_<freq>_<region>_<grid>_<source>_<expt>_<variant>[_<time>]` —
 9 fields, and **`table_id` is gone from both the filename and the global attributes**,
 so CMIP6-style instance ids have no slot for it or for the branding suffix. Use the
