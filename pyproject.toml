@@ -20,7 +20,7 @@ dependencies = [
     "distributed",
     "h5netcdf",
     "h5py",
-    "icechunk",
+    "icechunk>=2.0",
     "ipykernel",
     "netcdf4",
     "pre-commit",
@@ -37,6 +37,9 @@ dependencies = [
     "xpystac",
 ]
 
+[tool.uv]
+python-preference = "only-managed"
+
 [dependency-groups]
 docs = [
     "mystmd",
@@ -48,6 +51,6 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
-    "live: hits a live remote catalog over the network (deselect with -m 'not live')",
+    "live: hits a live remote catalog or store over the network (deselect with -m 'not live')",
     "watch: asserts an observed catalog state still holds; a failure means the catalogs changed, not that our code broke (deselect with -m 'not watch')",
 ]

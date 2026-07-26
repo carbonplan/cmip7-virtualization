@@ -34,5 +34,8 @@ def virtualize_from_urls(
         urls=list(urls),
         parser=parser,
         registry=registry,
+        coords='minimal',
+        compat='override',
+        # loadable_variables=['time','lon','lat','something']# we can apparently add values that are not found as dimensions here. 
     )
     return vds, registry

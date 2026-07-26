@@ -10,7 +10,7 @@ virtualizarr ``ObjectStoreRegistry``, covering both anonymous HTTP sources (CEDA
 Thredds / dap.ceda.ac.uk) and anonymous S3 sources (esgf-world, ``us-east-2``).
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, Iterable, List
 
 import icechunk as ic
 from virtualizarr.registry import ObjectStoreRegistry
@@ -52,6 +52,39 @@ def _prefixes(registry: ObjectStoreRegistry) -> List[str]:
     return [f"{k.scheme}://{k.netloc}/" for k in registry.map.keys()]
 
 
+def open_http_repository(
+    url: str,
+    *,
+    virtual_prefixes: Iterable[str] = (),
+) -> ic.Repository:
+    """Open a read-only Icechunk repository served as static files over HTTPS.
+
+    This is how a data centre can publish an Icechunk store from an ordinary web
+    server with no object-store API in front of it — CEDA serves one from a JASMIN
+    group workspace this way. Requires icechunk >= 2.0; 1.x has no HTTP repository
+    backend, so the only way in was to mirror the store and open it from disk.
+
+    ``virtual_prefixes`` are the hosts the store's chunk manifests point *at* (for
+    a CEDA-built store, ``https://dap.ceda.ac.uk/``). Each gets an anonymous HTTP
+    virtual-chunk container and matching read authorization; without them the
+    metadata opens fine but every chunk read fails.
+
+    The repository is read-only: HTTP storage cannot commit.
+    """
+    config = ic.RepositoryConfig.default()
+    for prefix in virtual_prefixes:
+        config.set_virtual_chunk_container(
+            ic.VirtualChunkContainer(url_prefix=prefix, store=ic.http_store())
+        )
+    return ic.Repository.open(
+        storage=ic.http_storage(url),
+        config=config,
+        authorize_virtual_chunk_access={
+            p: ic.credentials.HttpAccess for p in virtual_prefixes
+        },
+    )
+
+
 def vccs_from_registry(
     registry: ObjectStoreRegistry,
     *,
@@ -86,16 +119,21 @@ def http_vccs_from_registry(registry: ObjectStoreRegistry) -> List[ic.VirtualChu
 
 def authorize_prefixes_from_registry(
     registry: ObjectStoreRegistry,
-) -> Dict[str, Optional[ic.AnyS3Credential]]:
+) -> Dict[str, ic.AnyCredential]:
     """Read-side ``authorize_virtual_chunk_access`` map for ``Repository.open``.
 
-    Anonymous HTTP hosts map to ``None``; anonymous S3 hosts (esgf-world) map to
-    ``ic.s3_anonymous_credentials()``.
+    Anonymous HTTP hosts map to ``ic.credentials.HttpAccess``; anonymous S3 hosts
+    (esgf-world) map to ``ic.s3_anonymous_credentials()``.
+
+    Icechunk 2 replaced the bare ``None`` sentinel for no-auth containers with
+    explicit ones (``HttpAccess``, ``LocalFileSystemAccess``) — ``None`` still
+    works but warns, because it could not distinguish "needs no credentials" from
+    "credentials omitted by mistake". See earth-mover/icechunk#2194.
     """
-    auth: Dict[str, Optional[ic.AnyS3Credential]] = {}
+    auth: Dict[str, ic.AnyCredential] = {}
     for url_prefix in _prefixes(registry):
         if url_prefix.startswith("s3://"):
             auth[url_prefix] = ic.s3_anonymous_credentials()
         else:
-            auth[url_prefix] = None
+            auth[url_prefix] = ic.credentials.HttpAccess
     return auth
