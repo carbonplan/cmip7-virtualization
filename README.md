@@ -77,9 +77,7 @@ nbformat.write(nb, p)"
 To make a store shareable the *source* NetCDF has to be reachable too — a local store's
 manifests hold absolute paths from one machine. Upload the sources to the OSN bucket,
 then rebuild with `s3_endpoint_url` set so both the reader and the virtual-chunk
-container address the S3-compatible gateway. Runnable scaffolding for the IPSL files —
-upload commands plus a `build_on_osn()` guarded by `RUN_OSN`, **not yet executed** — is in
-[`notebooks/testing/osn-ref-generation-ipsl.ipynb`](notebooks/testing/osn-ref-generation-ipsl.ipynb).
+container address the S3-compatible gateway:
 
 ```bash
 export AWS_ACCESS_KEY_ID=$(op read "op://Work/z6baienaiyhiexztlbbonbeaka/Read-Write/Access_Key")
