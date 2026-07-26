@@ -12,8 +12,9 @@ from virtualizarr.xarray import open_virtual_mfdataset
 from virtualizarr.manifests import ManifestStore
 from virtualizarr.parsers.hdf.hdf import _construct_manifest_group
 
-# Must exceed one file, or an object is evicted before it can be reused. The
-# obspec-utils default (256 MiB) is smaller than a typical CMIP6 file.
+# Must exceed a single file size, or an object is evicted before it can be reused. The
+# obspec-utils default (256 MiB) is smaller than a typical CMIP6 file. 
+# CHECK: We might have to tune this for very large files and depending on the machine where its running.
 DEFAULT_CACHE_SIZE = 2 * 1024**3
 
 
@@ -47,9 +48,7 @@ def virtualize_from_urls(
     configure icechunk VirtualChunkContainers from ``registry.map.keys()``.
 
     ``cache_size`` is the per-host byte budget for caching fetched objects, or
-    ``None`` to disable. Without it, loading the ``time`` coordinate costs one
-    range request *per timestep* (12,606 on a typical CMIP6 file). Keep it above
-    the size of a single file, or objects are evicted as fast as they arrive.
+    ``None`` to disable.
     """
     if parser is None:
         # pass HDFParser() as argument to restore the non optimized version
