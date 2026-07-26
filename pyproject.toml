@@ -37,6 +37,9 @@ dependencies = [
     "xpystac",
 ]
 
+[tool.uv]
+python-preference = "only-managed"
+
 [dependency-groups]
 docs = [
     "mystmd",
