@@ -1,0 +1,61 @@
+name: Tests
+
+# The whole suite runs on every PR. It is split into two jobs so the check name
+# tells you what broke without opening the log: `offline` failing is our code,
+# `live` failing is usually somebody else's catalog. Same suite either way —
+# `not live` plus `live` is every test in the repo.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline:
+    name: offline (no network)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      # Exact release tag on purpose: astral-sh/setup-uv publishes floating major
+      # tags only up to v7, so @v9 does not resolve ("unable to find version v9").
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run offline tests
+        run: uv run pytest -m "not live" -v
+
+  live:
+    name: live (hits real ESGF catalogs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      # Exact release tag on purpose: astral-sh/setup-uv publishes floating major
+      # tags only up to v7, so @v9 does not resolve ("unable to find version v9").
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      # Includes the `watch` tests. A failure here can mean an ESGF catalog
+      # genuinely changed rather than that this PR broke something — read the
+      # assertion message, each one says what decision it is asking for.
+      - name: Run live tests
+        run: uv run pytest -m live -v

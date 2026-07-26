@@ -24,12 +24,35 @@ uv run ruff format
 
 ### Tests
 ```bash
-uv run pytest                    # everything, including live network tests
-uv run pytest -m "not live"      # offline / CI-without-network
+uv run pytest                          # everything, live network tests included
+uv run pytest -m "not live"            # offline only
+uv run pytest -m "live and not watch"  # live hard invariants only
+uv run pytest -m watch                 # "did the catalogs change?" checks
 ```
-Tests marked `live` (`tests/test_live_icechunk.py`) read a real remote store over
-the network. They run by default on purpose: a store somebody else hosts breaking
-is exactly what we want to hear about. Marker registered in `pyproject.toml`.
+`live` tests hit real ESGF catalogs (`tests/test_live_catalogs.py`) and remote
+Icechunk stores (`tests/test_live_icechunk.py`), and run by default — someone
+else's catalog or store moving under us is exactly what we want to hear about.
+`watch` tests assert an *observed* server state still holds; a failure means the
+world changed and a decision is due, not that our code broke. Markers in
+`pyproject.toml`.
+
+### CI (`.github/workflows/`)
+- `tests.yml` — every PR + push to `main`. Two jobs, `offline` and `live`, which together are the whole suite; split so the check name says whether it is our code or someone else's catalog.
+- `catalog-monitor.yml` — daily 06:00 UTC. Runs the whole suite and, on failure, opens (or comments on) an issue labelled `catalog-drift`. ⚠️ `schedule` **and** `workflow_dispatch` both require the workflow to be on the **default branch** — dispatching from a feature branch 404s — so the monitor cannot run at all until this is on `main`. The same tests run on every PR via `tests.yml`; only the issue-filing step is unexercised until then.
+- `deploy-docs.yml` — pre-existing; MyST → GitHub Pages on push to `main`.
+- Pinned to `actions/checkout@v5` + `astral-sh/setup-uv@v9` (`enable-cache: true`). Lint changes with `uvx --from actionlint-py actionlint .github/workflows/*.yml`.
+
+### Docs (requires `uv sync --group docs` first)
+```bash
+myst start          # local preview server at http://localhost:3000
+myst build --html   # build static HTML to ./_build/html/
+```
+
+### Jupyter kernel
+```bash
+uv run python -m ipykernel install --user --name=esgf-virtual-zarr
+jupyter kernelspec uninstall esgf-virtual-zarr
+```
 
 ## Worktree workflow
 
@@ -51,21 +74,16 @@ another branch — a worktree cut from a feature branch drags all of its commits
 the eventual PR. Note `uv sync` in a worktree resolves against that worktree's
 `uv.lock`, so a dependency bump stays scoped to the branch.
 
-### Docs (requires `uv sync --group docs` first)
-```bash
-myst start          # local preview server at http://localhost:3000
-myst build --html   # build static HTML to ./_build/html/
-```
-
-### Jupyter kernel
-```bash
-uv run python -m ipykernel install --user --name=esgf-virtual-zarr
-jupyter kernelspec uninstall esgf-virtual-zarr
-```
-
 ## Architecture
 
-This is a research project with no installable Python package — it contains scripts and notebooks demonstrating how to create virtual Zarr reference stores for CMIP6 data.
+A research project — scripts and notebooks demonstrating how to create virtual Zarr reference stores for CMIP6/CMIP7 data — plus an installable package, `src/cmip7_virtualization/`.
+
+**`catalog.py`** — the only module documented here; the rest arrive on their own branches.
+
+- `STAC_BASES`: read/write endpoints for test and production on both the East (CEDA) and West federations.
+- `collection_counts(base, verify=True)`: item count per collection. Absorbs two server quirks so callers need not know them — (a) `/collections` can 500 *wholesale* when a single collection document is unserialisable (West's `obs4ref`), so `_collections_meta` falls back to the root catalog's `child` links; (b) West advertises lowercase ids (`cmip6plus`) but stores canonical DRS case (`CMIP6Plus`) and `/search` is case-sensitive, so the collection title is OR'd in alongside `upper()`/`lower()`. ⚠️ `verify=True` reconciles against the unfiltered total and, on mismatch, **pages every item** — 391k on East prod. Pass `verify=False` on hot paths.
+- `is_reference_asset(asset)`: substring-matches `kerchunk`/`icechunk` in the media type and the `reference`/`virtual` roles, because publishers disagree on spelling (`application/vnd.zarr+kerchunk` vs our `application/vnd+zarr+kerchunk`).
+- `notebooks/catalog-discovery/catalog-check.ipynb` prints the whole matrix; `tests/test_live_catalogs.py` is the live monitor.
 
 **Two reference-generation patterns:**
 

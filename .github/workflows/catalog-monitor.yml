@@ -1,0 +1,125 @@
+name: Catalog monitor
+
+# The scheduled half of the monitoring story. The PR suite tells you whether a
+# change is safe; this tells you whether the world moved while nobody was
+# looking — a catalog repopulating, a collection emptying, reference assets
+# reappearing. It runs the entire suite and files the result as an issue so a
+# change is noticed without anyone having to open a PR first.
+#
+# NOTE: `schedule` only ever fires on the repository's DEFAULT branch, and
+# `workflow_dispatch` likewise needs the workflow present there (dispatching from
+# a feature branch returns HTTP 404). So this cannot be triggered at all until it
+# is merged to `main`. The tests themselves are covered on every PR by tests.yml;
+# only the issue-filing step below is unexercised until the merge.
+
+on:
+  schedule:
+    # 06:00 UTC daily. ESGF catalogs move on the order of days, not minutes.
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    name: Full suite against live catalogs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      # Exact release tag on purpose: astral-sh/setup-uv publishes floating major
+      # tags only up to v7, so @v9 does not resolve ("unable to find version v9").
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run the entire test suite
+        id: pytest
+        run: |
+          set +e
+          uv run pytest -v --tb=short 2>&1 | tee pytest-output.txt
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Summarise on the run page
+        if: always()
+        run: |
+          {
+            echo "## Catalog monitor"
+            echo
+            if [ "${{ steps.pytest.outputs.exit_code }}" = "0" ]; then
+              echo "All checks passed — the catalogs are as last observed."
+            else
+              echo "The suite failed (exit ${{ steps.pytest.outputs.exit_code }})."
+            fi
+            echo
+            echo '```'
+            grep -E "passed|failed|error" pytest-output.txt | tail -5 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: File or update the drift issue
+        if: steps.pytest.outputs.exit_code != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          gh label create catalog-drift \
+            --color B60205 \
+            --description "A watched ESGF catalog changed, or a live check failed" \
+            2>/dev/null || true
+
+          {
+            echo "The scheduled monitor failed. This usually means an ESGF catalog"
+            echo "changed rather than that our code broke — see \`tests/test_live_catalogs.py\`."
+            echo
+            echo "- A **watch** failure is a decision to make: a workaround can be dropped,"
+            echo "  a notebook re-pointed, or something we have been waiting for has arrived."
+            echo "- A **live** failure means an endpoint is unreachable, was emptied, or"
+            echo "  stopped reconciling."
+            echo
+            echo "[Full run log]($RUN_URL)"
+            echo
+            echo '```'
+            grep -E "^(FAILED|ERROR)" pytest-output.txt | head -50 || true
+            echo '```'
+            echo
+            echo "<details><summary>Tail of pytest output</summary>"
+            echo
+            echo '```'
+            tail -c 15000 pytest-output.txt
+            echo '```'
+            echo
+            echo "</details>"
+          } > issue-body.md
+
+          existing=$(gh issue list --state open --label catalog-drift \
+            --limit 1 --json number --jq '.[0].number // empty')
+
+          if [ -n "$existing" ]; then
+            echo "Commenting on existing issue #$existing"
+            gh issue comment "$existing" --body-file issue-body.md
+          else
+            echo "Opening a new drift issue"
+            gh issue create \
+              --title "Catalog monitor: a watched ESGF catalog changed" \
+              --label catalog-drift \
+              --body-file issue-body.md
+          fi
+
+      - name: Fail the run if the suite failed
+        if: steps.pytest.outputs.exit_code != '0'
+        run: exit 1
