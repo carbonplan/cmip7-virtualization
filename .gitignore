@@ -166,3 +166,9 @@ combined_full.json
 notebooks/temp_test/
 # git worktrees (see CLAUDE.md "Worktree workflow")
 .worktrees/
+
+# internal planning notes, todos, and session scratch — not for the public repo
+internal/
+
+# NetCDF source data — inputs to reference generation, never committed
+*.nc
