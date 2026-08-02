@@ -7,12 +7,12 @@ from urllib.parse import urlparse
 
 import xarray as xr
 from obspec_utils.readers import EagerStoreReader
+from obspec_utils.registry import ObjectStoreRegistry
 from obspec_utils.wrappers import CachingReadableStore
 from obstore.store import from_url
 from virtualizarr.manifests import ManifestStore
 from virtualizarr.parsers import HDFParser
 from virtualizarr.parsers.hdf.hdf import _construct_manifest_group
-from virtualizarr.registry import ObjectStoreRegistry
 from virtualizarr.xarray import open_virtual_mfdataset
 
 # Must exceed a single file size, or an object is evicted before it can be reused. The
@@ -21,7 +21,7 @@ from virtualizarr.xarray import open_virtual_mfdataset
 DEFAULT_CACHE_SIZE = 2 * 1024**3
 
 #: Scheme used for local-filesystem sources. Every url handed to virtualizarr must
-#: carry a scheme — ``virtualizarr.registry.get_url_key`` raises ``ValueError`` on a
+#: carry a scheme — ``obspec_utils.registry.get_url_key`` raises ``ValueError`` on a
 #: bare path — so local files travel as ``file:///abs/path.nc``.
 LOCAL_SCHEME = "file"
 

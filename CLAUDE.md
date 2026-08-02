@@ -17,10 +17,15 @@ uv run python reference_generation/netcdf4_s3_icechunk.py
 ```
 
 ### Linting
+Ruff is **not** a project dependency (`uv run ruff` fails) and there is no
+`[tool.ruff]` config, so lint through pre-commit — that pins the version and scopes
+it to `python, pyi`:
 ```bash
-uv run ruff check --fix
-uv run ruff format
+uv run pre-commit run --all-files
 ```
+⚠️ Do **not** reach for a bare `uvx ruff check --fix`. With no project config it picks
+up whatever user-level config exists (extra rule sets) and, unlike the hook, rewrites
+notebooks too — a one-line fix turns into 70 unrelated edits.
 
 ### Tests
 ```bash
@@ -127,7 +132,14 @@ Demo: `notebooks/reference-generation/read-jasmin-icechunk-over-https.ipynb`.
 metadata opens fine while every array read fails.
 
 **Key libraries:**
-- `virtualizarr` — installed from git HEAD (not PyPI); entry points: `open_virtual_dataset`, `open_virtual_mfdataset`, `HDFParser`, `ObjectStoreRegistry`
+- `virtualizarr` — pinned to the PyPI release `==2.7.1` (was git HEAD until 2026-07-26);
+  entry points: `open_virtual_dataset`, `open_virtual_mfdataset`, `HDFParser`.
+  `xarray` is pinned to `==2026.7.0`. Bump both deliberately: `uv lock --upgrade-package
+  <name>` after editing the pin, then run the full suite.
+- `obspec-utils` — owns `ObjectStoreRegistry` (and `get_url_key`) as of virtualizarr
+  2.7. `from virtualizarr.registry import ObjectStoreRegistry` still resolves to the
+  same class but warns; import from `obspec_utils.registry`. Older notebooks still use
+  the deprecated path.
 - `icechunk` — Zarr V3 virtual reference store. **Requires >= 2.0**: `http_storage()`
   (HTTP as the *repository* backend) only exists in 2.x. Do not confuse it with
   `http_store()`, which is the *virtual-chunk* source and exists in both. Icechunk 2
