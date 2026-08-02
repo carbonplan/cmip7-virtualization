@@ -5,8 +5,8 @@ Two hosting backends for the Icechunk *store* itself:
   - ``aws_s3_storage``  — real AWS S3 (region only; creds from the AWS default
                           chain, so ``AWS_PROFILE`` / SSO works)
 
-Plus helpers to build virtual-chunk containers and read-side authorization from a
-virtualizarr ``ObjectStoreRegistry``, covering both anonymous HTTP sources (CEDA
+Plus helpers to build virtual-chunk containers and read-side authorization from an
+obspec-utils ``ObjectStoreRegistry``, covering both anonymous HTTP sources (CEDA
 Thredds / dap.ceda.ac.uk) and anonymous S3 sources (esgf-world, ``us-east-2``).
 """
 
@@ -16,7 +16,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import icechunk as ic
-from virtualizarr.registry import ObjectStoreRegistry
+from obspec_utils.registry import ObjectStoreRegistry
 
 # esgf-world (the public West/DOE CMIP6 S3 mirror) lives in us-east-2.
 ESGF_WORLD_REGION = "us-east-2"
